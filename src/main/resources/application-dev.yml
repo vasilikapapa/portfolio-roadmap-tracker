@@ -1,0 +1,35 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/portfolio_tracker
+    username: portfolio
+    password: portfolio
+  security:
+   debug: true
+
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+logging:
+  level:
+    org.springframework.security: TRACE
+
+
+
+app:
+  security:
+    jwt:
+      # Must be at least 32 chars for HS256
+      secret: ${APP_JWT_SECRET}
+    admin:
+      username: ${APP_ADMIN_USER}
+      # We'll store a bcrypt hash here (generate below)
+      password-hash:  ${APP_ADMIN_PASS_HASH}
