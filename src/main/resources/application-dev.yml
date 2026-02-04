@@ -24,9 +24,9 @@ app:
     jwt:
       # Must be at least 32 chars for HS256
       # Uses env var if set; otherwise uses this dev fallback
-      secret: ${APP_JWT_SECRET:super-long-32-characters-minimum-secret-key-123456}
+      secret: ${APP_JWT_SECRET}
 
     admin:
       # Uses env vars if set; otherwise uses dev fallbacks
       username: ${APP_ADMIN_USER:admin}
-      password-hash: ${APP_ADMIN_PASS_HASH:$2a$10$UCmAZ/kJ7XGMkzTQ4K0Nsukd.a5bVEjlkCBoJlIDz23zT1lS5inD.}
+      password-hash: ${APP_ADMIN_PASS_HASH}
