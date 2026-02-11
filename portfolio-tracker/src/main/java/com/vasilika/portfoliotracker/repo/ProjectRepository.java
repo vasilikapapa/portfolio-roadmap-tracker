@@ -5,6 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
+
 
 /**
  * ProjectRepository
@@ -27,4 +29,6 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
      * @return an Optional containing the project if found, or empty if not
      */
     Optional<Project> findBySlug(String slug);
+    List<Project> findAllByOrderByCreatedAtDesc();
+
 }

@@ -71,7 +71,7 @@ public class Project {
      * Timestamp when the project was created.
      * Set automatically on insert.
      */
-    @Column(name = "created_at", nullable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     /**
@@ -102,6 +102,8 @@ public class Project {
     void onUpdate() {
         updatedAt = Instant.now();
     }
+
+
 
     // ===== Getters & Setters =====
 
