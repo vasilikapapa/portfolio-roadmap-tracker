@@ -4,6 +4,7 @@
 
 # Maven / Java
 target/
+**/target/
 *.log
 
 # Node
