@@ -16,6 +16,24 @@ import org.springframework.stereotype.Service;
 
 import java.util.Locale;
 
+/**
+ * =========================================
+ * Project Query Service
+ * =========================================
+ *
+ * Handles read-only operations for:
+ * - Listing projects
+ * - Retrieving project details
+ * - Filtering and paginating tasks
+ * - Paginating project updates
+ *
+ * This service is typically used by public
+ * (non-admin) endpoints.
+ *
+ * Separation of responsibilities:
+ * - Admin service = write operations
+ * - Query service = read operations
+ */
 @Service
 public class ProjectQueryService {
 
@@ -23,19 +41,45 @@ public class ProjectQueryService {
     private final TaskRepository tasks;
     private final UpdateRepository updates;
 
+    /**
+     * Constructor injection for repositories.
+     */
     public ProjectQueryService(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates) {
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
     }
 
+    /**
+     * Returns all projects as DTOs.
+     *
+     * Used for:
+     * - Portfolio overview page
+     * - Public project listing
+     */
     public java.util.List<ProjectDto> listProjects() {
-        return projects.findAll().stream().map(ProjectMapper::toDto).toList();
+        return projects.findAll()
+                .stream()
+                .map(ProjectMapper::toDto)
+                .toList();
     }
 
+    /**
+     * Retrieves full project details by slug.
+     *
+     * Includes:
+     * - All tasks (sorted by status + creation time)
+     * - All updates (newest first)
+     *
+     * This version loads everything without pagination.
+     */
     public ProjectDetailsDto getDetails(String slug) {
+
         var project = projects.findBySlug(slug).orElseThrow();
 
+        // Sort tasks by:
+        // 1. Status order
+        // 2. Creation time (ascending)
         var taskDtos = tasks.findByProject_Id(project.getId()).stream()
                 .sorted((a, b) -> {
                     int sa = a.getStatus().ordinal();
@@ -46,13 +90,33 @@ public class ProjectQueryService {
                 .map(TaskMapper::toDto)
                 .toList();
 
-        var updateDtos = updates.findByProject_IdOrderByCreatedAtDesc(project.getId()).stream()
+        // Updates sorted newest first
+        var updateDtos = updates
+                .findByProject_IdOrderByCreatedAtDesc(project.getId())
+                .stream()
                 .map(UpdateMapper::toDto)
                 .toList();
 
-        return new ProjectDetailsDto(ProjectMapper.toDto(project), taskDtos, updateDtos);
+        return new ProjectDetailsDto(
+                ProjectMapper.toDto(project),
+                taskDtos,
+                updateDtos
+        );
     }
 
+    /**
+     * Retrieves project details with pagination and optional filtering.
+     *
+     * Supports:
+     * - Task filtering (status, type, priority)
+     * - Pagination for tasks
+     * - Pagination for updates
+     *
+     * Useful for:
+     * - Large projects
+     * - Infinite scroll
+     * - API efficiency
+     */
     public ProjectDetailsPagedDto getDetailsPaged(
             String slug,
             String status,
@@ -63,18 +127,23 @@ public class ProjectQueryService {
             int updatesPage,
             int updatesSize
     ) {
+
         var project = projects.findBySlug(slug).orElseThrow();
 
+        // Parse optional enum filters
         TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
         TaskType ty = type == null ? null : parseEnum(TaskType.class, type);
         TaskPriority pr = priority == null ? null : parseEnum(TaskPriority.class, priority);
 
+        // Task pagination
         Pageable tp = PageRequest.of(tasksPage, tasksSize);
         var taskPage = tasks.findPagedForProject(project.getId(), st, ty, pr, tp);
 
+        // Update pagination
         Pageable up = PageRequest.of(updatesPage, updatesSize);
         var updatePage = updates.findByProject_IdOrderByCreatedAtDesc(project.getId(), up);
 
+        // Wrap task results into PageDto
         var tasksDto = new PageDto<>(
                 taskPage.getContent().stream().map(TaskMapper::toDto).toList(),
                 taskPage.getNumber(),
@@ -84,6 +153,7 @@ public class ProjectQueryService {
                 taskPage.hasNext()
         );
 
+        // Wrap update results into PageDto
         var updatesDto = new PageDto<>(
                 updatePage.getContent().stream().map(UpdateMapper::toDto).toList(),
                 updatePage.getNumber(),
@@ -93,9 +163,21 @@ public class ProjectQueryService {
                 updatePage.hasNext()
         );
 
-        return new ProjectDetailsPagedDto(ProjectMapper.toDto(project), tasksDto, updatesDto);
+        return new ProjectDetailsPagedDto(
+                ProjectMapper.toDto(project),
+                tasksDto,
+                updatesDto
+        );
     }
 
+    /**
+     * Utility method to safely parse enum values.
+     *
+     * Normalizes:
+     * - Trims whitespace
+     * - Converts to uppercase
+     * - Matches enum constants
+     */
     private static <E extends Enum<E>> E parseEnum(Class<E> enumClass, String value) {
         return Enum.valueOf(enumClass, value.trim().toUpperCase(Locale.ROOT));
     }

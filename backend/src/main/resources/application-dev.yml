@@ -1,33 +1,36 @@
 spring:
   datasource:
-    url: jdbc:postgresql://portfolio_pg:5432/portfolio_tracker
-    username: portfolio
-    password: portfolio
+    url: jdbc:postgresql://portfolio_pg:5432/portfolio_tracker  # PostgreSQL DB URL (Docker/local service name: portfolio_pg)
+    username: portfolio                                         # Database username (dev environment)
+    password: portfolio                                         # Database password (dev only — use env vars in production)
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: validate                                        # Validate schema against entities (Flyway manages DB structure)
 
   flyway:
-    enabled: true
-    locations: classpath:db/migration
+    enabled: true                                               # Enable Flyway migrations at startup
+    locations: classpath:db/migration                           # Folder containing migration SQL files
 
   security:
-    debug: true
+    debug: true                                                 # Enables detailed Spring Security debugging (DEV ONLY)
 
 
 logging:
   level:
-    org.springframework.security: TRACE
+    org.springframework.security: TRACE                         # Very detailed security logs (useful for debugging auth issues)
+
 
 app:
   security:
     jwt:
-      # Must be at least 32 chars for HS256
-      # Uses env var if set; otherwise uses this dev fallback
+      # JWT signing secret
+      # Must be at least 32 characters for HS256.
+      # Uses environment variable if provided.
       secret: ${APP_JWT_SECRET}
 
     admin:
-      # Uses env vars if set; otherwise uses dev fallbacks
+      # Admin credentials loaded from environment variables
+      # Password should be stored as BCrypt hash.
       username: ${APP_ADMIN_USER}
       password-hash: ${APP_ADMIN_PASS_HASH}

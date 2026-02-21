@@ -1,33 +1,88 @@
 package com.vasilika.portfoliotracker.web;
 
-
 import com.vasilika.portfoliotracker.service.query.ProjectQueryService;
 import com.vasilika.portfoliotracker.web.dto.ProjectDetailsDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDetailsPagedDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDto;
 import org.springframework.web.bind.annotation.*;
 
-
+/**
+ * =========================================
+ * Public Projects Controller
+ * =========================================
+ *
+ * Exposes public read-only endpoints for projects.
+ *
+ * Responsibilities:
+ * - List projects for portfolio display
+ * - Retrieve project details
+ * - Provide paginated project data
+ *
+ * These endpoints are intentionally public
+ * and do not require authentication.
+ *
+ * Base path:
+ *   /api/projects
+ */
 @RestController
 @RequestMapping("/api/projects")
 public class PublicProjectsController {
 
     private final ProjectQueryService query;
 
+    /**
+     * Constructor injection of query service.
+     */
     public PublicProjectsController(ProjectQueryService query) {
         this.query = query;
     }
 
+    /**
+     * Returns all projects.
+     *
+     * HTTP Method: GET
+     * Endpoint: /api/projects
+     *
+     * Used for:
+     * - Portfolio homepage
+     * - Project listings
+     */
     @GetMapping
     public java.util.List<ProjectDto> list() {
         return query.listProjects();
     }
 
+    /**
+     * Returns full project details by slug.
+     *
+     * HTTP Method: GET
+     * Endpoint: /api/projects/{slug}
+     *
+     * Includes:
+     * - Project info
+     * - All tasks
+     * - All updates
+     */
     @GetMapping("/{slug}")
     public ProjectDetailsDto details(@PathVariable String slug) {
         return query.getDetails(slug);
     }
 
+    /**
+     * Returns project details with pagination
+     * and optional filtering.
+     *
+     * HTTP Method: GET
+     * Endpoint: /api/projects/{slug}/paged
+     *
+     * Supports:
+     * - Task filtering by status, type, priority
+     * - Pagination for tasks and updates
+     *
+     * Default pagination:
+     * - Tasks: page 0, size 10
+     * - Updates: page 0, size 5
+     */
     @GetMapping("/{slug}/paged")
     public ProjectDetailsPagedDto detailsPaged(
             @PathVariable String slug,
@@ -39,7 +94,15 @@ public class PublicProjectsController {
             @RequestParam(defaultValue = "0") int updatesPage,
             @RequestParam(defaultValue = "5") int updatesSize
     ) {
-        return query.getDetailsPaged(slug, status, type, priority, tasksPage, tasksSize, updatesPage, updatesSize);
+        return query.getDetailsPaged(
+                slug,
+                status,
+                type,
+                priority,
+                tasksPage,
+                tasksSize,
+                updatesPage,
+                updatesSize
+        );
     }
 }
-

@@ -1,1 +1,22 @@
+-- =========================================
+-- Enable UUID Extension (PostgreSQL)
+-- =========================================
+--
+-- Purpose:
+-- Enables the "uuid-ossp" extension in PostgreSQL.
+--
+-- This extension provides functions for generating
+-- UUID values directly inside the database.
+--
+-- Commonly used function:
+--   uuid_generate_v4()
+--
+-- Why this is useful:
+-- - Generate unique identifiers at DB level
+-- - Avoid relying only on application-side UUID creation
+-- - Useful in distributed systems
+--
+-- IF NOT EXISTS prevents error if the extension
+-- is already installed.
+--
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
