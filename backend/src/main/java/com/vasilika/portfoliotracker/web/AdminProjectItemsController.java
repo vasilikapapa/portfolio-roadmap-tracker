@@ -9,11 +9,7 @@ import com.vasilika.portfoliotracker.domain.enums.TaskType;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
-import com.vasilika.portfoliotracker.web.dto.CreateProjectRequest;
-import com.vasilika.portfoliotracker.web.dto.CreateTaskRequest;
-import com.vasilika.portfoliotracker.web.dto.CreateUpdateRequest;
-import com.vasilika.portfoliotracker.web.dto.TaskDto;
-import com.vasilika.portfoliotracker.web.dto.UpdateDto;
+import com.vasilika.portfoliotracker.web.dto.*;
 import com.vasilika.portfoliotracker.web.mapper.TaskMapper;
 import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
 import jakarta.validation.Valid;
@@ -154,6 +150,117 @@ public class AdminProjectItemsController {
         tasks.delete(task);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Partially update an existing project.
+     *
+     * PATCH /admin/projects/{projectId}
+     *
+     * Only non-null fields from the request are applied.
+     * Slug uniqueness is enforced.
+     */
+    @PatchMapping("/{projectId}")
+    public ResponseEntity<Project> updateProject(
+            @PathVariable UUID projectId,
+            @Valid @RequestBody UpdateProjectRequest req
+    ) {
+
+        // Fetch project or fail fast
+        Project p = projects.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
+        // Handle slug change safely (must remain unique)
+        if (req.slug() != null && !req.slug().trim().equalsIgnoreCase(p.getSlug())) {
+            String newSlug = req.slug().trim();
+
+            if (projects.existsBySlug(newSlug)) {
+                throw new IllegalArgumentException("Slug already exists: " + newSlug);
+            }
+
+            p.setSlug(newSlug);
+        }
+
+        // Apply partial updates
+        if (req.name() != null) p.setName(req.name().trim());
+        if (req.summary() != null) p.setSummary(req.summary());
+        if (req.description() != null) p.setDescription(req.description());
+        if (req.techStack() != null) p.setTechStack(req.techStack());
+        if (req.repoUrl() != null) p.setRepoUrl(req.repoUrl());
+        if (req.liveUrl() != null) p.setLiveUrl(req.liveUrl());
+
+        p.setUpdatedAt(Instant.now());
+
+        return ResponseEntity.ok(projects.save(p));
+    }
+
+    /**
+     * Delete a project.
+     *
+     * DELETE /admin/projects/{projectId}
+     *
+     * Tasks and updates are deleted automatically due to
+     * ON DELETE CASCADE foreign key constraint in the database.
+     */
+    @DeleteMapping("/{projectId}")
+    public ResponseEntity<?> deleteProject(@PathVariable UUID projectId) {
+
+        if (!projects.existsById(projectId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        projects.deleteById(projectId);
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Update a task.
+     *
+     * PATCH /admin/projects/{projectId}/tasks/{taskId}
+     *
+     * Supports:
+     * - Moving task between statuses (Kanban board behavior)
+     * - Updating priority, type, targetVersion
+     * - Editing title/description
+     */
+    @PatchMapping("/{projectId}/tasks/{taskId}")
+    public ResponseEntity<TaskDto> updateTask(
+            @PathVariable UUID projectId,
+            @PathVariable UUID taskId,
+            @Valid @RequestBody UpdateTaskRequest req
+    ) {
+
+        Task t = tasks.findById(taskId)
+                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+
+        // Ensure task belongs to this project
+        if (!t.getProject().getId().equals(projectId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Update only provided fields
+        if (req.title() != null) t.setTitle(req.title());
+        if (req.description() != null) t.setDescription(req.description());
+
+        if (req.status() != null)
+            t.setStatus(parseEnum(TaskStatus.class, req.status()));
+
+        if (req.type() != null)
+            t.setType(parseEnum(TaskType.class, req.type()));
+
+        if (req.priority() != null)
+            t.setPriority(parseEnum(TaskPriority.class, req.priority()));
+
+        if (req.targetVersion() != null)
+            t.setTargetVersion(req.targetVersion());
+
+        t.setUpdatedAt(Instant.now());
+
+        Task saved = tasks.save(t);
+
+        return ResponseEntity.ok(TaskMapper.toDto(saved));
+    }
+
 
     /**
      * Helper for mapping string values to enums safely.
