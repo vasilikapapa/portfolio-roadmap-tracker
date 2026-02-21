@@ -1,0 +1,109 @@
+/**
+ * ==========================================
+ * Global Root Styles
+ * ==========================================
+ * Base typography, color scheme, and rendering
+ * optimizations applied across the application.
+ */
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Allows browser to adapt UI elements for dark/light mode */
+  color-scheme: light dark;
+
+  /* Default dark theme colors */
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  /* Improve font rendering quality */
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/**
+ * Anchor styling
+ * Clean link appearance with subtle hover effect.
+ */
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #535bf2;
+}
+
+/**
+ * Body layout setup
+ * Centers main content and ensures minimum width/height
+ * for responsive layout support.
+ */
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;  /* Prevents layout break on small screens */
+  min-height: 100vh;
+}
+
+/**
+ * Primary heading styling.
+ */
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+/**
+ * Button base styling
+ * Neutral appearance with subtle hover/focus effects.
+ */
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+
+/* Hover state highlights button border */
+button:hover {
+  border-color: #646cff;
+}
+
+/* Focus state for accessibility */
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/**
+ * ==========================================
+ * Light Mode Overrides
+ * ==========================================
+ * Automatically applied when user prefers
+ * light color scheme.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+
+  a:hover {
+    color: #747bff;
+  }
+
+  button {
+    background-color: #f9f9f9;
+  }
+}

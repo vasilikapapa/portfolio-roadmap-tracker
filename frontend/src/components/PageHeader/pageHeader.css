@@ -1,0 +1,27 @@
+.pageHeader {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 24px 10px 24px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.pageTitle {
+  font-size: 28px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.pageSubtitle {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pageHeaderRight {
+  display: flex;
+  gap: 10px;
+}

@@ -1,0 +1,92 @@
+/* Navbar wrapper:
+   - Sticky positioning keeps navbar visible while scrolling
+   - Frosted glass effect using backdrop blur
+   - Semi-transparent dark background for modern UI look */
+.navWrap {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(10px);
+  background: rgba(11, 18, 32, 0.55);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Inner container:
+   - Centers content horizontally
+   - Limits max width for readability
+   - Flex layout for logo + navigation alignment */
+.navInner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Brand/logo styling:
+   - Slightly bold text for emphasis
+   - Subtle spacing and opacity for clean look */
+.brand {
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  opacity: 0.95;
+}
+
+/* Navigation links container:
+   - Horizontal layout
+   - Spacing between links */
+.navLinks {
+  display: flex;
+  gap: 14px;
+}
+
+/* Base link styling:
+   - Soft opacity for inactive state
+   - Rounded clickable area
+   - Smooth hover transitions */
+.navLinks a {
+  opacity: 0.8;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+/* Hover state:
+   - Increase visibility
+   - Light background highlight */
+.navLinks a:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.06);
+  text-decoration: none;
+}
+
+/* Active route styling:
+   - Indicates current page
+   - Slightly stronger highlight than hover */
+.navLinks a.active {
+  opacity: 1;
+  background: rgba(255,255,255,0.10);
+  text-decoration: none;
+}
+
+/* Logout button styling:
+   - Matches link appearance but clearly a button
+   - Subtle border for distinction */
+.navBtn {
+  opacity: 0.9;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+}
+
+/* Logout button hover state:
+   - Increased opacity
+   - Slightly stronger highlight */
+.navBtn:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.12);
+}

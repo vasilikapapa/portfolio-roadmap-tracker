@@ -1,0 +1,177 @@
+/**
+ * ==========================================
+ * Global Theme Variables
+ * ==========================================
+ * Centralized design tokens for:
+ * - Background colors
+ * - Panel transparency
+ * - Text shades
+ * - Shadows & border radius
+ * Makes theme adjustments easy and consistent.
+ */
+:root {
+  --bg: #0b1220;                      /* Main dark background */
+  --panel: rgba(255, 255, 255, 0.06); /* Glass panel background */
+  --panel2: rgba(255, 255, 255, 0.09);/* Slightly stronger panel */
+
+  --border: rgba(255, 255, 255, 0.12); /* Subtle border color */
+
+  --text: rgba(255, 255, 255, 0.92);   /* Primary text */
+  --muted: rgba(255, 255, 255, 0.70);  /* Secondary text */
+  --muted2: rgba(255, 255, 255, 0.55); /* Tertiary text */
+
+  --shadow: 0 10px 35px rgba(0, 0, 0, 0.25); /* Card shadow */
+  --radius: 16px;                              /* Default rounding */
+}
+
+/* Ensure padding/border do not affect element width */
+* {
+  box-sizing: border-box;
+}
+
+/**
+ * Root layout sizing
+ * Ensures full-height app layout for flex positioning
+ */
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+}
+
+/**
+ * Global page styling
+ * - Dark gradient background
+ * - Subtle color highlights for depth
+ * - System font stack for performance
+ */
+html, body {
+  margin: 0;
+  padding: 0;
+  background:
+    radial-gradient(1200px 600px at 10% 0%, rgba(120, 140, 255, 0.18), transparent 60%),
+    radial-gradient(1000px 600px at 90% 10%, rgba(0, 200, 180, 0.14), transparent 55%),
+    var(--bg);
+
+  color: var(--text);
+
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    "Apple Color Emoji",
+    "Segoe UI Emoji";
+}
+
+/**
+ * Anchor styling
+ * Slight opacity for subtle links with hover clarity.
+ */
+a {
+  color: var(--text);
+  opacity: 0.9;
+  text-decoration: none;
+}
+
+a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/**
+ * Main content container
+ * Centers content and limits width for readability.
+ */
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/**
+ * Card components
+ * Used for project cards, panels, etc.
+ */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* Softer card variant (less shadow emphasis) */
+.card-soft {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/**
+ * Tag / badge styling
+ * Commonly used for tech stack labels.
+ */
+.pill {
+  font-size: 12px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(0,0,0,0.12);
+  white-space: nowrap;
+}
+
+/* Text helper classes */
+.muted { color: var(--muted); }
+.muted2 { color: var(--muted2); }
+
+/**
+ * Typography helpers
+ * Keeps heading sizes consistent across pages.
+ */
+.h1 { font-size: 34px; margin: 0 0 6px; }
+.h2 { font-size: 18px; margin: 0 0 10px; }
+.h3 { font-size: 14px; margin: 16px 0 8px; opacity: 0.95; }
+
+/**
+ * Layout utility classes
+ */
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  height: 14px;
+}
+
+/**
+ * Page layout structure
+ * Enables sticky footer layout.
+ */
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Main page content grows to fill available space */
+.pageMain {
+  flex: 1;
+}
+
+/**
+ * Background fade effect at bottom
+ * Prevents abrupt cutoff of gradient background.
+ */
+.bgFadeBottom {
+  background:
+    radial-gradient(1200px 600px at 10% 0%, rgba(120, 140, 255, 0.18), transparent 60%),
+    radial-gradient(1000px 600px at 90% 10%, rgba(0, 200, 180, 0.14), transparent 55%),
+    linear-gradient(to bottom, transparent 70%, rgba(0,0,0,0.10) 100%);
+}

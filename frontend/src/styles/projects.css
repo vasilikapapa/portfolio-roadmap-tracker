@@ -1,0 +1,82 @@
+/**
+ * ==========================================
+ * Project Grid Layout
+ * ==========================================
+ * Responsive grid for displaying project cards.
+ * Uses mobile-first approach with breakpoints
+ * for tablet and desktop layouts.
+ */
+.projectGrid {
+  display: grid;
+  gap: 16px;
+}
+
+/* Mobile: single column */
+@media (min-width: 0px) {
+  .projectGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet: two columns */
+@media (min-width: 768px) {
+  .projectGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Desktop: three columns */
+@media (min-width: 1100px) {
+  .projectGrid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/**
+ * Individual project card styling
+ * Glass-style panel with hover interaction.
+ */
+.projectCard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+/* Subtle hover lift effect for better UX */
+.projectCard:hover {
+  transform: translateY(-2px);
+  background: var(--panel2);
+  text-decoration: none;
+}
+
+/**
+ * Card header section
+ * Aligns project title with tech stack label.
+ */
+.projectTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+/**
+ * Project summary text
+ * Secondary description styling.
+ */
+.projectSummary {
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+/**
+ * Footer area
+ * Usually contains metadata like date created.
+ */
+.projectFooter {
+  margin-top: 14px;
+}

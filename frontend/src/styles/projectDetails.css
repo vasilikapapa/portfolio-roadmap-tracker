@@ -1,0 +1,205 @@
+/**
+ * Back navigation link
+ * Typically used to return to previous page or project list.
+ */
+.backLink {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  opacity: 0.9;
+  margin-bottom: 10px;
+}
+
+/**
+ * Page header container
+ * Provides spacing around project title/meta.
+ */
+.header {
+  padding: 18px;
+}
+
+/**
+ * Metadata row (tags, dates, tech stack)
+ * Flexible wrapping for responsiveness.
+ */
+.metaRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/**
+ * External links row (repo, live demo, docs)
+ * Keeps links grouped with spacing.
+ */
+.linksRow {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/**
+ * Main task board layout
+ * Responsive grid for project columns.
+ */
+.board {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* Mobile-first: single column */
+@media (min-width: 0px) {
+  .board {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet: two columns */
+@media (min-width: 720px) {
+  .board {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Desktop: three columns */
+@media (min-width: 1024px) {
+  .board {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/**
+ * Individual column container
+ * Slight translucent background for separation.
+ */
+.column {
+  padding: 12px;
+  background: rgba(255,255,255,0.04);
+}
+
+/**
+ * Column header layout
+ * Aligns title and action elements.
+ */
+.columnHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+/**
+ * Task list container
+ * Grid layout keeps consistent spacing.
+ */
+.taskList {
+  display: grid;
+  gap: 10px;
+}
+
+/**
+ * Task card styling
+ * Includes hover interaction for subtle feedback.
+ */
+.taskCard {
+  padding: 12px;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.taskCard:hover {
+  transform: translateY(-1px);
+  background: rgba(255,255,255,0.12);
+}
+
+/**
+ * Task title emphasis
+ */
+.taskTitle {
+  font-weight: 700;
+  margin: 0;
+}
+
+/**
+ * Task description
+ * Preserves line breaks from user input.
+ */
+.taskDesc {
+  margin-top: 6px;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+/**
+ * Task metadata section
+ * Used for priority, type, status labels.
+ */
+.taskMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/**
+ * Task footer info (timestamps, versions)
+ */
+.taskFooter {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted2);
+}
+
+/**
+ * Updates section container
+ * Used for project dev logs / release notes.
+ */
+.updates {
+  display: grid;
+  gap: 10px;
+}
+
+/**
+ * Individual update card styling.
+ */
+.updateCard {
+  padding: 14px;
+}
+
+/**
+ * Update header layout
+ * Title left, timestamp right.
+ */
+.updateHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+/**
+ * Update title emphasis.
+ */
+.updateTitle {
+  font-weight: 700;
+}
+
+/**
+ * Update timestamp styling.
+ */
+.updateTime {
+  font-size: 12px;
+  color: var(--muted2);
+  white-space: nowrap;
+}
+
+/**
+ * Update body text
+ * Preserves formatting from backend markdown/text.
+ */
+.updateBody {
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
