@@ -2,16 +2,11 @@
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app
 
-COPY . .
-RUN chmod +x mvnw \
- && sed -i 's/\r$//' mvnw \
- && ./mvnw -DskipTests package
-
 # ---- Run stage ----
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-COPY --from=build /app/target/*.jar app.jar
+COPY target/*.jar app.jar
 
 # Render sets PORT; Spring must listen on it
 ENV PORT=8080

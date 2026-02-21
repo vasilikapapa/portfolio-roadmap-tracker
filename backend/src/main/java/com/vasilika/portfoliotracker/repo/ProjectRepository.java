@@ -30,5 +30,6 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
      */
     Optional<Project> findBySlug(String slug);
     List<Project> findAllByOrderByCreatedAtDesc();
+    boolean existsBySlug(String slug);
 
 }
