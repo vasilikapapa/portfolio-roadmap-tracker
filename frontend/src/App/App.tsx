@@ -1,56 +1,57 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
-import "./App.css";
+import { Navigate, Route, Routes } from "react-router-dom";
+import Layout from "../components/Layout";
+import ProjectsPage from "../pages/ProjectsPage";
+import ProjectDetailsPage from "../pages/ProjectDetailsPage";
+import AdminLoginPage from "../pages/AdminLoginPage";
+import AdminHomePage from "../pages/AdminHomePage";
+import AdminProjectDetailsPage from "../pages/AdminProjectDetailsPage";
+import HomeRedirect from "../pages/HomeRedirect";
+import RequireAuth from "../RequireAuth";
 
 /**
- * App Component (default Vite + React starter example)
+ * App Component
  *
- * Demonstrates:
- * - Basic React state management using useState
- * - Static asset imports (logos)
- * - Simple JSX rendering and event handling
+ * Structure:
+ * - Public routes: projects + project details
+ * - Admin routes: login (public) + admin pages (protected)
  */
-function App() {
-  // Local state for demo counter
-  const [count, setCount] = useState(0);
-
+export default function App() {
   return (
-    <>
-      {/* Logo links section */}
-      <div>
-        {/* Vite documentation link */}
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
+    <Routes>
+      <Route element={<Layout />}>
+        {/* Root redirect */}
+        <Route path="/" element={<HomeRedirect />} />
 
-        {/* React documentation link */}
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
+        {/* PUBLIC ROUTES */}
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects/:slug" element={<ProjectDetailsPage />} />
 
-      {/* Main heading */}
-      <h1>Vite + React</h1>
+        {/* ADMIN ROUTES (login is public) */}
+        <Route path="/admin/login" element={<AdminLoginPage />} />
 
-      {/* Demo counter card */}
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
+        {/* Admin dashboard */}
+        <Route
+          path="/admin"
+          element={
+            <RequireAuth>
+              <AdminHomePage />
+            </RequireAuth>
+          }
+        />
 
-        {/* Instructions text */}
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
+        {/* Admin project editor page */}
+        <Route
+          path="/admin/projects/:slug"
+          element={
+            <RequireAuth>
+              <AdminProjectDetailsPage />
+            </RequireAuth>
+          }
+        />
 
-      {/* Footer informational text */}
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }
-
-export default App;

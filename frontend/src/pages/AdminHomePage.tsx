@@ -9,6 +9,7 @@ import { api, type CreateProjectRequest, type ProjectDto } from "../lib/api";
  * Admin dashboard for:
  * - Viewing all projects
  * - Creating new projects
+ * - Deleting projects
  * - Basic project statistics
  *
  * Requires admin authentication (handled by backend + token).
@@ -62,10 +63,35 @@ export default function AdminHomePage() {
    * Currently only project count is available.
    */
   const stats = useMemo(() => {
-    return {
-      projects: projects.length,
-    };
+    return { projects: projects.length };
   }, [projects]);
+
+  /**
+   * Deletes a project after user confirmation.
+   *
+   * Steps:
+   * 1. Confirm with the user (prevents accidental deletion)
+   * 2. Call backend DELETE endpoint
+   * 3. Reload projects list
+   * 4. Display error message if request fails
+   */
+  async function onDeleteProject(projectId: string) {
+    if (
+      !confirm("Delete this project? This will delete its tasks and updates too.")
+    ) {
+      return;
+    }
+
+    try {
+      setError(null); // Clear any previous error
+
+      await api.deleteProject(projectId); // Delete project (cascades tasks/updates in DB)
+
+      await load(); // Refresh list after deletion
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    }
+  }
 
   /**
    * Handles creating a new project.
@@ -75,11 +101,13 @@ export default function AdminHomePage() {
    * - Reloads project list
    */
   async function onCreateProject() {
+    // Basic client-side validation (backend validation still applies)
     if (!slug.trim() || !name.trim()) {
       setError("Slug and Name are required.");
       return;
     }
 
+    // Prepare payload using API types (keeps frontend aligned with backend DTO)
     const payload: CreateProjectRequest = {
       slug: slug.trim(),
       name: name.trim(),
@@ -96,7 +124,7 @@ export default function AdminHomePage() {
       // Create project via API
       await api.createProject(payload);
 
-      // Reset form inputs
+      // Reset form inputs after successful creation
       setSlug("");
       setName("");
       setSummary("");
@@ -105,7 +133,7 @@ export default function AdminHomePage() {
       setRepoUrl("");
       setLiveUrl("");
 
-      // Refresh project list
+      // Refresh project list so the new project appears
       await load();
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -133,9 +161,7 @@ export default function AdminHomePage() {
         <div className="row" style={{ gap: 12, marginBottom: 14 }}>
           <div className="card" style={{ padding: 14, flex: 1 }}>
             <div className="muted2">Projects</div>
-            <div style={{ fontSize: 26, fontWeight: 800 }}>
-              {stats.projects}
-            </div>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{stats.projects}</div>
           </div>
         </div>
 
@@ -234,19 +260,35 @@ export default function AdminHomePage() {
 
           <div className="projectGrid">
             {projects.map((p) => (
-              <Link
-                key={p.id}
-                to={`/projects/${p.slug}`}
-                className="projectCard"
-              >
+              <Link key={p.id} to={`/projects/${p.slug}`} className="projectCard">
                 <div className="projectTop">
                   <h3>{p.name}</h3>
                   <span className="pill">{p.techStack}</span>
                 </div>
 
-                {p.summary && (
-                  <p className="projectSummary">{p.summary}</p>
-                )}
+                {/* Delete button inside Link:
+                    preventDefault prevents navigation when clicking delete */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault(); // do not navigate to project page
+                    e.stopPropagation(); // prevent event bubbling to Link
+                    onDeleteProject(p.id);
+                  }}
+                  style={{
+                    marginTop: 10,
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                    background: "rgba(255, 80, 80, 0.12)",
+                    color: "var(--text)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Delete
+                </button>
+
+                {p.summary && <p className="projectSummary">{p.summary}</p>}
 
                 <div className="projectFooter">
                   <span className="muted2">Slug: {p.slug}</span>

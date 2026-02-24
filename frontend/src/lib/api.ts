@@ -31,6 +31,51 @@ export type ProjectDto = {
 };
 
 /**
+ * =========================================
+ * Update Project Request Type
+ * =========================================
+ *
+ * Used when partially updating a project.
+ *
+ * `Partial<>` makes all fields optional,
+ * allowing PATCH-style updates where only
+ * changed fields are sent.
+ */
+export type UpdateProjectRequest = Partial<{
+  slug: string;              // URL-friendly project identifier
+  name: string;              // Project display name
+  summary: string | null;    // Short description (nullable)
+  description: string | null; // Detailed description
+  techStack: string | null;  // Technologies used
+  repoUrl: string | null;    // Source repository link
+  liveUrl: string | null;    // Live deployment link
+}>;
+
+
+/**
+ * =========================================
+ * Update Task Request Type
+ * =========================================
+ *
+ * Used for partial task updates via API.
+ *
+ * Supports updating task metadata such as:
+ * - status
+ * - type
+ * - priority
+ * - version target
+ * - title/description
+ */
+export type UpdateTaskRequest = Partial<{
+  status: TaskStatus;          // Task workflow status
+  type: TaskType;              // Task category (feature/bug/etc.)
+  priority: TaskPriority;      // Priority level
+  targetVersion: string | null; // Planned release version
+  title: string;               // Task title
+  description: string | null;  // Task details
+}>;
+
+/**
  * Generic HTTP helper for API requests.
  *
  * Features:
@@ -43,12 +88,13 @@ async function http<T>(
   init?: RequestInit & { skipAuth?: boolean }
 ): Promise<T> {
   const token = getToken();
+  const useAuth = !init?.skipAuth;
 
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(useAuth && token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {}),
     },
   });
@@ -152,6 +198,8 @@ export type CreateProjectRequest = {
  * Keeps fetch logic consistent across the app.
  */
 export const api = {
+
+
   /**
    * Fetch all public projects.
    */
@@ -215,4 +263,37 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+   
+     /**
+   * Partially update a project.
+   *
+   * HTTP: PATCH /admin/projects/{projectId}
+   */
+  updateProject: (projectId: string, payload: UpdateProjectRequest) =>
+    http<ProjectDto>(`/admin/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Delete a project by ID.
+   *
+   * HTTP: DELETE /admin/projects/{projectId}
+   */
+  deleteProject: (projectId: string) =>
+    http<void>(`/admin/projects/${projectId}`, {
+      method: "DELETE",
+    }),
+
+  /**
+   * Partially update a task within a project.
+   *
+   * HTTP: PATCH /admin/projects/{projectId}/tasks/{taskId}
+   */
+  updateTask: (projectId: string, taskId: string, payload: UpdateTaskRequest) =>
+    http<TaskDto>(`/admin/projects/${projectId}/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
 };

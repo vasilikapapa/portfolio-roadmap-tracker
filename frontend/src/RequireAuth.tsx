@@ -1,5 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { isAuthed } from "./lib/auth";
+import { isAdmin } from "./lib/auth";
 
 /**
  * ==========================================
@@ -29,7 +29,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
    * - Save attempted path in state ("from")
    *   so login flow can redirect back after success.
    */
-  if (!isAuthed()) {
+  if (!isAdmin()) {
     return (
       <Navigate
         to="/admin/login"

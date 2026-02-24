@@ -1,47 +1,30 @@
 /**
- * Storage key used for saving the admin JWT token.
- * Keeping it in a constant avoids typos and makes refactoring easier.
- */
-const KEY = "portfolio_admin_token";
-
-/**
- * Retrieves the stored authentication token from localStorage.
+ * auth.ts
+ * Very small “auth storage” layer:
+ * - We store an admin JWT token in localStorage
+ * - Presence of a token = "admin mode" in the UI
  *
- * Returns:
- * - The JWT token string if present
- * - null if not found
+ * (Backend must still enforce security; UI alone is not protection.)
  */
-export function getToken() {
-  return localStorage.getItem(KEY);
+
+const TOKEN_KEY = "admin_token";
+
+/** Read token from localStorage (or null if not logged in). */
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
 }
 
-/**
- * Stores the authentication token in localStorage.
- *
- * @param token - JWT access token received from backend login
- */
+/** Save token to localStorage. */
 export function setToken(token: string) {
-  localStorage.setItem(KEY, token);
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
-/**
- * Removes the authentication token from localStorage.
- * Used during logout to clear user session.
- */
+/** Remove token from localStorage (logout). */
 export function clearToken() {
-  localStorage.removeItem(KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
-/**
- * Checks whether the user is authenticated.
- *
- * Returns:
- * - true if a token exists
- * - false if no token is stored
- *
- * Note:
- * This only checks token presence, not expiration validity.
- */
-export function isAuthed() {
+/** Simple UI check: if token exists, treat user as admin. */
+export function isAdmin(): boolean {
   return Boolean(getToken());
 }

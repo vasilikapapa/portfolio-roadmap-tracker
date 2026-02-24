@@ -1,5 +1,4 @@
 import { Navigate } from "react-router-dom";
-import { isAuthed } from "../lib/auth";
 
 /**
  * HomeRedirect
@@ -16,5 +15,5 @@ import { isAuthed } from "../lib/auth";
  * preventing users from navigating back to the redirect page.
  */
 export default function HomeRedirect() {
-  return <Navigate to={isAuthed() ? "/projects" : "/admin/login"} replace />;
+  return <Navigate to="/projects" replace />;
 }
