@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-
+import { Link, useParams, useNavigate } from "react-router-dom";
 import PageHeader from "../components/PageHeader/PageHeader";
 import {
   api,
@@ -14,10 +13,10 @@ import {
 } from "../lib/api";
 
 import "../styles/projectDetails.css";
+import { useAuth } from "../context/AuthContext";
 
 /**
- * Groups tasks into Kanban columns by their status:
- * BACKLOG / IN_PROGRESS / DONE
+ * Groups tasks into Kanban columns by their status.
  */
 function groupByStatus(tasks: TaskDto[]) {
   const map: Record<TaskStatus, TaskDto[]> = {
@@ -25,23 +24,14 @@ function groupByStatus(tasks: TaskDto[]) {
     IN_PROGRESS: [],
     DONE: [],
   };
-
-  for (const t of tasks) {
-    map[t.status].push(t);
-  }
+  for (const t of tasks) map[t.status].push(t);
   return map;
 }
 
-/**
- * Formats an ISO timestamp string into a readable local date/time.
- */
 function fmt(iso: string) {
   return new Date(iso).toLocaleString();
 }
 
-/**
- * Converts TaskStatus enum values into friendly column labels.
- */
 function ColumnLabel({ status }: { status: TaskStatus }) {
   return (
     <>
@@ -54,31 +44,28 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
   );
 }
 
-export default function AdminProjectDetailsPage() {
+/**
+ * DemoProjectDetailsPage (PROTECTED by RequireDemoAuth)
+ *
+ * Same UI as admin details, but:
+ * - All requests go to /demo/** (sandbox)
+ */
+export default function DemoProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const {isDemo} = useAuth();
 
   const [data, setData] = useState<ProjectDetailsDto | null>(null);
-
-  // Page state
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
-
-  // Modal state
+ 
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
-  // Modal server errors (shown INSIDE modal)
-  const [taskServerError, setTaskServerError] = useState<string | null>(null);
-  const [updateServerError, setUpdateServerError] = useState<string | null>(null);
-
-  // Modal field-level validation errors
   const [taskErrors, setTaskErrors] = useState<{ title?: string }>({});
-  const [updateErrors, setUpdateErrors] = useState<{ title?: string; body?: string }>(
-    {}
-  );
+  const [updateErrors, setUpdateErrors] = useState<{ title?: string; body?: string }>({});
 
-  // Create Task form state
+  // Create Task form
   const [tTitle, setTTitle] = useState("");
   const [tDesc, setTDesc] = useState("");
   const [tStatus, setTStatus] = useState<TaskStatus>("BACKLOG");
@@ -87,29 +74,19 @@ export default function AdminProjectDetailsPage() {
   const [tTarget, setTTarget] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
 
-  // Create Update form state
+  // Create Update form
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
 
-  function resetTaskModalState() {
-    setTaskErrors({});
-    setTaskServerError(null);
-  }
-
-  function resetUpdateModalState() {
-    setUpdateErrors({});
-    setUpdateServerError(null);
-  }
-
   function closeTaskModal() {
     setTaskModalOpen(false);
-    resetTaskModalState();
+    setTaskErrors({});
   }
 
   function closeUpdateModal() {
     setUpdateModalOpen(false);
-    resetUpdateModalState();
+    setUpdateErrors({});
   }
 
   async function load() {
@@ -119,7 +96,7 @@ export default function AdminProjectDetailsPage() {
     setPageError(null);
 
     try {
-      const details = await api.getProjectDetailsBySlug(slug);
+      const details = await api.demoGetProjectDetailsBySlug(slug);
       setData(details);
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
@@ -133,20 +110,6 @@ export default function AdminProjectDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // ESC closes whichever modal is open
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      if (taskModalOpen) closeTaskModal();
-      if (updateModalOpen) closeUpdateModal();
-    }
-
-    if (taskModalOpen || updateModalOpen) {
-      window.addEventListener("keydown", onKeyDown);
-      return () => window.removeEventListener("keydown", onKeyDown);
-    }
-  }, [taskModalOpen, updateModalOpen]);
-
   const grouped = useMemo(() => groupByStatus(data?.tasks ?? []), [data]);
 
   const updatesSorted = useMemo(() => {
@@ -155,15 +118,19 @@ export default function AdminProjectDetailsPage() {
     return u;
   }, [data]);
 
+  // Guard: if someone hits /demo/... without demo login, send them to demo login
+  useEffect(() => {
+    if (!isDemo && data) {
+      navigate(`/demo/login?next=${encodeURIComponent(`/demo/projects/${data.project.slug}`)}`);
+    }
+  }, [isDemo, data, navigate]);
+
   async function onCreateTask() {
     if (!data) return;
 
     const nextErrors: { title?: string } = {};
     if (!tTitle.trim()) nextErrors.title = "Task title is required.";
-
     setTaskErrors(nextErrors);
-    setTaskServerError(null);
-
     if (Object.keys(nextErrors).length > 0) return;
 
     const payload: CreateTaskRequest = {
@@ -177,9 +144,10 @@ export default function AdminProjectDetailsPage() {
 
     try {
       setCreatingTask(true);
-      await api.createTask(data.project.id, payload);
+      setPageError(null);
 
-      // reset fields
+      await api.demoCreateTask(data.project.id, payload);
+
       setTTitle("");
       setTDesc("");
       setTStatus("BACKLOG");
@@ -190,7 +158,7 @@ export default function AdminProjectDetailsPage() {
       closeTaskModal();
       await load();
     } catch (e: any) {
-      setTaskServerError(String(e?.message ?? e));
+      setPageError(String(e?.message ?? e));
     } finally {
       setCreatingTask(false);
     }
@@ -202,10 +170,7 @@ export default function AdminProjectDetailsPage() {
     const nextErrors: { title?: string; body?: string } = {};
     if (!uTitle.trim()) nextErrors.title = "Update title is required.";
     if (!uBody.trim()) nextErrors.body = "Update body is required.";
-
     setUpdateErrors(nextErrors);
-    setUpdateServerError(null);
-
     if (Object.keys(nextErrors).length > 0) return;
 
     const payload: CreateUpdateRequest = {
@@ -215,34 +180,41 @@ export default function AdminProjectDetailsPage() {
 
     try {
       setCreatingUpdate(true);
-      await api.createUpdate(data.project.id, payload);
+      setPageError(null);
 
-      // reset fields
+      await api.demoCreateUpdate(data.project.id, payload);
+
       setUTitle("");
       setUBody("");
 
       closeUpdateModal();
       await load();
     } catch (e: any) {
-      setUpdateServerError(String(e?.message ?? e));
+      setPageError(String(e?.message ?? e));
     } finally {
       setCreatingUpdate(false);
     }
   }
 
-  async function onDeleteTask(taskId: string) {
+   async function onDeleteProject() {
     if (!data) return;
-    if (!confirm("Delete this task?")) return;
+
+    if (!confirm(`Delete project "${data.project.name}"? This cannot be undone.`)) return;
 
     try {
       setPageError(null);
+      await api.demoDeleteProject(data.project.id);
+      navigate("/demo");
+    } catch (e: any) {
+      setPageError(String(e?.message ?? e));
+    }
+  }
 
-      // Prefer project-scoped delete if your API has it:
-      // await api.deleteTaskFromProject(data.project.id, taskId);
-
-      // If you only have deleteTask(taskId), keep this:
-      await api.deleteTask(taskId);
-
+  async function onDeleteTask(taskId: string) {
+    if (!confirm("Delete this task?")) return;
+    try {
+      setPageError(null);
+      await api.demoDeleteTask(taskId);
       await load();
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
@@ -251,33 +223,19 @@ export default function AdminProjectDetailsPage() {
 
   async function onDeleteUpdate(updateId: string) {
     if (!confirm("Delete this update?")) return;
-
     try {
       setPageError(null);
-      await api.deleteUpdate(updateId);
+      await api.demoDeleteUpdate(updateId);
       await load();
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
     }
   }
 
-  async function onDeleteProject() {
-    if (!data) return;
-
-    if (!confirm(`Delete project "${data.project.name}"? This cannot be undone.`)) return;
-
-    try {
-      setPageError(null);
-      await api.deleteProject(data.project.id);
-      navigate("/projects");
-    } catch (e: any) {
-      setPageError(String(e?.message ?? e));
-    }
-  }
 
   return (
     <main className="container">
-      <Link className="backLink" to="/projects">
+      <Link className="backLink" to="/demo">
         ← Back
       </Link>
 
@@ -287,14 +245,15 @@ export default function AdminProjectDetailsPage() {
       {data && (
         <>
           <PageHeader
-            title={data.project.name}
-            subtitle={data.project.summary ?? undefined}
+            title={`${data.project.name} (Demo)`}
+            subtitle="Sandbox mode — safe CRUD"
             right={
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
                   type="button"
                   onClick={() => {
-                    resetTaskModalState();
+                    setPageError(null);
+                    setTaskErrors({});
                     setTaskModalOpen(true);
                   }}
                   style={{
@@ -312,7 +271,8 @@ export default function AdminProjectDetailsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    resetUpdateModalState();
+                    setPageError(null);
+                    setUpdateErrors({});
                     setUpdateModalOpen(true);
                   }}
                   style={{
@@ -373,14 +333,7 @@ export default function AdminProjectDetailsPage() {
                           {t.targetVersion ? <span className="pill">{t.targetVersion}</span> : null}
                         </div>
 
-                        <div
-                          style={{
-                            marginTop: 10,
-                            display: "flex",
-                            gap: 10,
-                            alignItems: "center",
-                          }}
-                        >
+                        <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
                           <span className="muted2" style={{ fontSize: 13 }}>
                             Status
                           </span>
@@ -389,7 +342,7 @@ export default function AdminProjectDetailsPage() {
                             value={t.status}
                             onChange={async (e) => {
                               const next = e.target.value as TaskStatus;
-                              await api.updateTask(data.project.id, t.id, { status: next });
+                              await api.demoUpdateTask(data.project.id, t.id, { status: next });
                               await load();
                             }}
                             style={{ padding: 8, borderRadius: 10 }}
@@ -468,9 +421,7 @@ export default function AdminProjectDetailsPage() {
             </div>
           </section>
 
-          {/* =========================
-              Create Task Modal
-             ========================= */}
+          {/* Create Task Modal */}
           {taskModalOpen && (
             <div
               role="dialog"
@@ -491,11 +442,7 @@ export default function AdminProjectDetailsPage() {
               <div
                 onClick={(e) => e.stopPropagation()}
                 className="card"
-                style={{
-                  width: "min(720px, 100%)",
-                  padding: 16,
-                  borderRadius: 16,
-                }}
+                style={{ width: "min(720px, 100%)", padding: 16, borderRadius: 16 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
@@ -518,19 +465,14 @@ export default function AdminProjectDetailsPage() {
                   </button>
                 </div>
 
-                {taskServerError && (
-                  <p style={{ color: "salmon", marginTop: 0 }}>{taskServerError}</p>
-                )}
+                {pageError && <p style={{ color: "salmon", marginTop: 0 }}>{pageError}</p>}
 
                 <div style={{ display: "grid", gap: 10 }}>
                   <input
                     value={tTitle}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      setTTitle(v);
-                      if (taskErrors.title && v.trim()) {
-                        setTaskErrors((prev) => ({ ...prev, title: undefined }));
-                      }
+                      setTTitle(e.target.value);
+                      if (taskErrors.title) setTaskErrors({});
                     }}
                     placeholder="Title"
                     style={{
@@ -645,9 +587,7 @@ export default function AdminProjectDetailsPage() {
             </div>
           )}
 
-          {/* =========================
-              Create Update Modal
-             ========================= */}
+          {/* Create Update Modal */}
           {updateModalOpen && (
             <div
               role="dialog"
@@ -668,11 +608,7 @@ export default function AdminProjectDetailsPage() {
               <div
                 onClick={(e) => e.stopPropagation()}
                 className="card"
-                style={{
-                  width: "min(720px, 100%)",
-                  padding: 16,
-                  borderRadius: 16,
-                }}
+                style={{ width: "min(720px, 100%)", padding: 16, borderRadius: 16 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
@@ -695,19 +631,14 @@ export default function AdminProjectDetailsPage() {
                   </button>
                 </div>
 
-                {updateServerError && (
-                  <p style={{ color: "salmon", marginTop: 0 }}>{updateServerError}</p>
-                )}
+                {pageError && <p style={{ color: "salmon", marginTop: 0 }}>{pageError}</p>}
 
                 <div style={{ display: "grid", gap: 10 }}>
                   <input
                     value={uTitle}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      setUTitle(v);
-                      if (updateErrors.title && v.trim()) {
-                        setUpdateErrors((prev) => ({ ...prev, title: undefined }));
-                      }
+                      setUTitle(e.target.value);
+                      if (updateErrors.title) setUpdateErrors((p) => ({ ...p, title: undefined }));
                     }}
                     placeholder="Title"
                     style={{
@@ -728,11 +659,8 @@ export default function AdminProjectDetailsPage() {
                   <textarea
                     value={uBody}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      setUBody(v);
-                      if (updateErrors.body && v.trim()) {
-                        setUpdateErrors((prev) => ({ ...prev, body: undefined }));
-                      }
+                      setUBody(e.target.value);
+                      if (updateErrors.body) setUpdateErrors((p) => ({ ...p, body: undefined }));
                     }}
                     placeholder="Body"
                     rows={6}

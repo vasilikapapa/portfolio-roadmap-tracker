@@ -1,8 +1,11 @@
-import { getToken } from "./auth";
+import { clearAuth, getToken } from "./auth";
 
 /**
  * Base API URL loaded from Vite environment variables.
  * Must be defined in .env.local or deployment environment.
+ *
+ * Example:
+ * VITE_API_URL=http://localhost:8081
  */
 const API_URL = import.meta.env.VITE_API_URL as string;
 
@@ -30,106 +33,35 @@ export type ProjectDto = {
   updatedAt: string;
 };
 
-/**
- * =========================================
- * Update Project Request Type
- * =========================================
- *
- * Used when partially updating a project.
- *
- * `Partial<>` makes all fields optional,
- * allowing PATCH-style updates where only
- * changed fields are sent.
- */
 export type UpdateProjectRequest = Partial<{
-  slug: string;              // URL-friendly project identifier
-  name: string;              // Project display name
-  summary: string | null;    // Short description (nullable)
-  description: string | null; // Detailed description
-  techStack: string | null;  // Technologies used
-  repoUrl: string | null;    // Source repository link
-  liveUrl: string | null;    // Live deployment link
+  slug: string;
+  name: string;
+  summary: string | null;
+  description: string | null;
+  techStack: string | null;
+  repoUrl: string | null;
+  liveUrl: string | null;
 }>;
 
-
-/**
- * =========================================
- * Update Task Request Type
- * =========================================
- *
- * Used for partial task updates via API.
- *
- * Supports updating task metadata such as:
- * - status
- * - type
- * - priority
- * - version target
- * - title/description
- */
-export type UpdateTaskRequest = Partial<{
-  status: TaskStatus;          // Task workflow status
-  type: TaskType;              // Task category (feature/bug/etc.)
-  priority: TaskPriority;      // Priority level
-  targetVersion: string | null; // Planned release version
-  title: string;               // Task title
-  description: string | null;  // Task details
-}>;
-
-/**
- * Generic HTTP helper for API requests.
- *
- * Features:
- * - Automatically attaches JWT token if present
- * - Handles JSON serialization/deserialization
- * - Throws descriptive error for non-OK responses
- */
-async function http<T>(
-  path: string,
-  init?: RequestInit & { skipAuth?: boolean }
-): Promise<T> {
-  const token = getToken();
-  const useAuth = !init?.skipAuth;
-
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(useAuth && token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers || {}),
-    },
-  });
-
-  // Handle HTTP errors explicitly
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} ${res.statusText} – ${text}`);
-  }
-
-  // 204 No Content responses
-  if (res.status === 204) return undefined as T;
-
-  return res.json() as Promise<T>;
-}
-
-/**
- * Enum-like types matching backend task enums.
- */
 export type TaskStatus = "BACKLOG" | "IN_PROGRESS" | "DONE";
 export type TaskType = "FEATURE" | "BUG" | "REFACTOR";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 
-/**
- * Authentication response structure.
- */
+export type UpdateTaskRequest = Partial<{
+  status: TaskStatus;
+  type: TaskType;
+  priority: TaskPriority;
+  targetVersion: string | null;
+  title: string;
+  description: string | null;
+}>;
+
 export type LoginResponse = {
   accessToken: string;
   tokenType: string;
   expiresAt: string;
 };
 
-/**
- * Task DTO returned by backend.
- */
 export type TaskDto = {
   id: string;
   projectId: string;
@@ -143,9 +75,6 @@ export type TaskDto = {
   updatedAt: string;
 };
 
-/**
- * Update / Dev log DTO.
- */
 export type UpdateDto = {
   id: string;
   projectId: string;
@@ -154,18 +83,12 @@ export type UpdateDto = {
   createdAt: string;
 };
 
-/**
- * Combined project details response.
- */
 export type ProjectDetailsDto = {
   project: ProjectDto;
   tasks: TaskDto[];
   updates: UpdateDto[];
 };
 
-/**
- * Request payloads for creating entities.
- */
 export type CreateTaskRequest = {
   title: string;
   description?: string | null;
@@ -192,108 +115,149 @@ export type CreateProjectRequest = {
 
 /**
  * ========================
- * API Client
+ * HTTP Helper
  * ========================
- * Centralized API wrapper for backend communication.
- * Keeps fetch logic consistent across the app.
+ *
+ * - Attaches JWT token automatically (unless skipAuth)
+ * - Parses JSON when available
+ * - Returns undefined for 204 No Content
+ * - Throws a readable error message on non-OK responses
  */
+async function http<T>(
+  path: string,
+  init?: RequestInit & { skipAuth?: boolean }
+): Promise<T> {
+  const token = getToken();
+  const useAuth = !init?.skipAuth;
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...(useAuth && token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers || {}),
+    },
+  });
+
+  // If token expired/invalid: clear local storage so UI can recover cleanly.
+  if (res.status === 401) {
+    clearAuth();
+  }
+
+  if (!res.ok) {
+    const contentType = res.headers.get("content-type") ?? "";
+    let details = "";
+
+    try {
+      if (contentType.includes("application/json")) {
+        const json = await res.json();
+        details =
+          typeof json === "string"
+            ? json
+            : json?.message
+            ? String(json.message)
+            : JSON.stringify(json);
+      } else {
+        details = await res.text();
+      }
+    } catch {
+      details = "";
+    }
+
+    const extra = details ? ` – ${details}` : "";
+    throw new Error(`HTTP ${res.status} ${res.statusText}${extra}`);
+  }
+
+  if (res.status === 204) return undefined as T;
+
+  const text = await res.text();
+  if (!text) return undefined as T;
+
+  return JSON.parse(text) as T;
+}
+
+/** ---------- API Client ---------- */
 export const api = {
-
-
-  /**
-   * Fetch all public projects.
-   */
+  // ---- Public ----
   listProjects: () => http<ProjectDto[]>("/api/projects"),
-
-  /**
-   * Fetch project details by slug.
-   */
   getProjectDetailsBySlug: (slug: string) =>
     http<ProjectDetailsDto>(`/api/projects/${encodeURIComponent(slug)}`),
 
-  /**
-   * Login endpoint (no auth header required).
-   */
-  login: (username: string, password: string) =>
+  // ---- Auth ----
+  loginAdmin: (username: string, password: string) =>
     http<LoginResponse>("/auth/login", {
       method: "POST",
       skipAuth: true,
       body: JSON.stringify({ username, password }),
     }),
 
-  /**
-   * Create a new task under a project (admin).
-   */
-  createTask: (projectId: string, payload: CreateTaskRequest) =>
-    http<TaskDto>(`/admin/projects/${projectId}/tasks`, {
+  loginDemo: (username: string, password: string) =>
+    http<LoginResponse>("/auth/demo/login", {
       method: "POST",
-      body: JSON.stringify(payload),
+      skipAuth: true, // critical: prevents expired token from being sent
+      body: JSON.stringify({ username, password }),
     }),
 
-  /**
-   * Delete a task by ID (admin).
-   */
-  deleteTask: (taskId: string) =>
-    http<void>(`/admin/tasks/${taskId}`, {
-      method: "DELETE",
-    }),
-
-  /**
-   * Create a project update / dev log entry.
-   */
-  createUpdate: (projectId: string, payload: CreateUpdateRequest) =>
-    http<UpdateDto>(`/admin/projects/${projectId}/updates`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  /**
-   * Delete an update entry.
-   */
-  deleteUpdate: (updateId: string) =>
-    http<void>(`/admin/updates/${updateId}`, {
-      method: "DELETE",
-    }),
-
-  /**
-   * Create a new project (admin-only).
-   */
+  // ---- Admin (real) ----
   createProject: (payload: CreateProjectRequest) =>
-    http<ProjectDto>("/admin/projects", {
+    http<ProjectDto>("/admin/projects", { method: "POST", body: JSON.stringify(payload) }),
+
+  updateProject: (projectId: string, payload: UpdateProjectRequest) =>
+    http<ProjectDto>(`/admin/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  deleteProject: (projectId: string) =>
+    http<void>(`/admin/projects/${projectId}`, { method: "DELETE" }),
+
+  createTask: (projectId: string, payload: CreateTaskRequest) =>
+    http<TaskDto>(`/admin/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(payload) }),
+
+  updateTask: (projectId: string, taskId: string, payload: UpdateTaskRequest) =>
+    http<TaskDto>(`/admin/projects/${projectId}/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  deleteTask: (taskId: string) =>
+    http<void>(`/admin/tasks/${taskId}`, { method: "DELETE" }),
+
+  createUpdate: (projectId: string, payload: CreateUpdateRequest) =>
+    http<UpdateDto>(`/admin/projects/${projectId}/updates`, { method: "POST", body: JSON.stringify(payload) }),
+
+  deleteUpdate: (updateId: string) =>
+    http<void>(`/admin/updates/${updateId}`, { method: "DELETE" }),
+
+  // ---- Demo (sandbox) ----
+  demoReset: () => http<void>("/demo/reset", { method: "POST" }),
+
+  demoListProjects: () => http<ProjectDto[]>("/demo/projects"),
+
+  demoGetProjectDetailsBySlug: (slug: string) =>
+    http<ProjectDetailsDto>(`/demo/projects/${encodeURIComponent(slug)}`),
+
+  demoCreateTask: (projectId: string, payload: CreateTaskRequest) =>
+    http<TaskDto>(`/demo/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(payload) }),
+
+  demoUpdateTask: (projectId: string, taskId: string, payload: UpdateTaskRequest) =>
+    http<TaskDto>(`/demo/projects/${projectId}/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+demoDeleteTask: (projectId: string, taskId: string) =>
+  http<void>(`/demo/projects/${projectId}/tasks/${taskId}`, {
+    method: "DELETE",
+  }),
+
+demoDeleteUpdate: (projectId: string, updateId: string) =>
+  http<void>(`/demo/projects/${projectId}/updates/${updateId}`, {
+    method: "DELETE",
+  }),
+  demoCreateUpdate: (projectId: string, payload: CreateUpdateRequest) =>
+    http<UpdateDto>(`/demo/projects/${projectId}/updates`, { method: "POST", body: JSON.stringify(payload) }),
+
+  demoCreateProject: (payload: CreateProjectRequest) =>
+    http<ProjectDto>("/demo/projects", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-   
-     /**
-   * Partially update a project.
-   *
-   * HTTP: PATCH /admin/projects/{projectId}
-   */
-  updateProject: (projectId: string, payload: UpdateProjectRequest) =>
-    http<ProjectDto>(`/admin/projects/${projectId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
 
-  /**
-   * Delete a project by ID.
-   *
-   * HTTP: DELETE /admin/projects/{projectId}
-   */
-  deleteProject: (projectId: string) =>
-    http<void>(`/admin/projects/${projectId}`, {
+  demoDeleteProject: (projectId: string) =>
+    http<void>(`/demo/projects/${projectId}`, {
       method: "DELETE",
     }),
-
-  /**
-   * Partially update a task within a project.
-   *
-   * HTTP: PATCH /admin/projects/{projectId}/tasks/{taskId}
-   */
-  updateTask: (projectId: string, taskId: string, payload: UpdateTaskRequest) =>
-    http<TaskDto>(`/admin/projects/${projectId}/tasks/${taskId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
-
+  
 };

@@ -1,40 +1,22 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 
 /**
  * AdminButton
  *
- * Behavior:
- * - If admin → execute onClick normally
- * - If not admin → redirect to /admin/login
+ * Pure styled button.
  *
- * UX:
- * - Button is never disabled
- * - Clear access control behavior
+ * Access control is handled by the page using it
+ * (e.g. ProjectDetailsPage decides where to navigate).
+ *
+ * This keeps logic centralized and prevents forced redirects.
  */
 
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement>;
 
-export default function AdminButton({ onClick, children, ...props }: Props) {
-  const { isAdmin } = useAuth();
-  const navigate = useNavigate();
-
-  function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
-    if (!isAdmin) {
-      // Redirect to login page
-      navigate("/admin/login");
-      return;
-    }
-
-    // If admin, execute original click handler
-    if (onClick) onClick(e);
-  }
-
+export default function AdminButton({ children, style, ...props }: Props) {
   return (
     <button
       {...props}
-      onClick={handleClick}
       style={{
         padding: "8px 12px",
         borderRadius: 10,
@@ -42,7 +24,7 @@ export default function AdminButton({ onClick, children, ...props }: Props) {
         background: "rgba(255,255,255,0.10)",
         color: "var(--text)",
         cursor: "pointer",
-        ...(props.style ?? {}),
+        ...style,
       }}
     >
       {children}

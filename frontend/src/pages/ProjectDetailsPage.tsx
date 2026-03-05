@@ -3,13 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import PageHeader from "../components/PageHeader/PageHeader";
 import AdminButton from "../components/AdminButton";
+import AccessChoiceModal from "../components/AccessChoiceModal";
+import { useAuth } from "../context/AuthContext"; 
 
-import {
-  api,
-  type ProjectDetailsDto,
-  type TaskDto,
-  type TaskStatus,
-} from "../lib/api";
+import { api, type ProjectDetailsDto, type TaskDto, type TaskStatus } from "../lib/api";
 
 import "../styles/projectDetails.css";
 
@@ -57,13 +54,15 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
  *
  * Purpose:
  * - Anyone can view project details, tasks, updates
- * - No admin editing UI here
- * - Only shows an "Edit" button that routes to the protected admin page
- *   (AdminButton will redirect to /admin/login if not authorized)
+ * - "Edit" is shown, but behavior depends on auth state:
+ *    - ADMIN -> go to admin edit page
+ *    - DEMO  -> go to demo edit page
+ *    - none  -> prompt: login as admin OR continue as demo
  */
 export default function ProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const { isAdmin, isDemo } = useAuth();
 
   // Loaded project details (null until fetched)
   const [data, setData] = useState<ProjectDetailsDto | null>(null);
@@ -71,6 +70,10 @@ export default function ProjectDetailsPage() {
   // UI state for fetch + error display
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  //Access choice modal
+  const [choiceOpen, setChoiceOpen] = useState(false);
+
+
 
   /**
    * Fetch project details from the backend by slug (PUBLIC endpoint).
@@ -91,7 +94,6 @@ export default function ProjectDetailsPage() {
     }
   }
 
-  // Load data on first render and whenever the slug changes
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,26 +109,49 @@ export default function ProjectDetailsPage() {
    */
   const updatesSorted = useMemo(() => {
     const u = [...(data?.updates ?? [])];
-    u.sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    u.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return u;
   }, [data]);
 
+   function onEditClick(){
+   if(!data) return
+   
+  // If already authenticated, route directly
+    if (isAdmin) {
+      navigate(`/admin/projects/${data.project.slug}`);
+      return;
+    }
+
+    if (isDemo) {
+      navigate(`/demo/projects/${data.project.slug}`);
+      return;
+    }
+
+    // Otherwise, ask how to continue
+    setChoiceOpen(true);}
+
+
+  function goAdminLogin() {
+    if (!data) return;
+    // "next" will bring them back to the admin page after login
+    navigate(`/admin/login?next=${encodeURIComponent(`/admin/projects/${data.project.slug}`)}`);
+  }
+
+  function goDemoLogin() {
+    if (!data) return;
+    navigate(`/demo/login?next=${encodeURIComponent(`/demo/projects/${data.project.slug}`)}`);
+  }
   return (
     <main className="container">
-      {/* Back navigation to projects list */}
       <Link className="backLink" to="/projects">
         ← Back
       </Link>
 
-      {/* Loading and error messages */}
       {loading && <p className="muted">Loading…</p>}
       {error && <p style={{ color: "salmon" }}>{error}</p>}
 
       {data && (
         <>
-          {/* Project title + optional repo/live links + Edit button */}
           <PageHeader
             title={data.project.name}
             subtitle={data.project.summary ?? undefined}
@@ -143,12 +168,8 @@ export default function ProjectDetailsPage() {
                   </a>
                 )}
 
-                {/* Always visible. If not logged in, AdminButton should redirect to /admin/login */}
-                <AdminButton
-                  onClick={() => navigate(`/admin/projects/${data.project.slug}`)}
-                >
-                  Edit
-                </AdminButton>
+                {/* Edit button is always visible, but behavior is gated */}
+                <AdminButton onClick={onEditClick}>Edit</AdminButton>
               </div>
             }
           />
@@ -174,18 +195,12 @@ export default function ProjectDetailsPage() {
                       <div key={t.id} className="card-soft taskCard">
                         <p className="taskTitle">{t.title}</p>
 
-                        {t.description ? (
-                          <div className="taskDesc">{t.description}</div>
-                        ) : null}
+                        {t.description ? <div className="taskDesc">{t.description}</div> : null}
 
                         <div className="taskMeta">
                           <span className="pill">{t.type}</span>
                           <span className="pill">{t.priority}</span>
-                          {t.targetVersion ? (
-                            <span className="pill">{t.targetVersion}</span>
-                          ) : null}
-
-                          {/* Read-only status pill */}
+                          {t.targetVersion ? <span className="pill">{t.targetVersion}</span> : null}
                           <span className="pill">{t.status}</span>
                         </div>
 
@@ -222,11 +237,16 @@ export default function ProjectDetailsPage() {
                 </div>
               ))}
 
-              {updatesSorted.length === 0 ? (
-                <p className="muted">No updates yet.</p>
-              ) : null}
+              {updatesSorted.length === 0 ? <p className="muted">No updates yet.</p> : null}
             </div>
           </section>
+          
+          <AccessChoiceModal
+            open={choiceOpen}
+            onClose={() => setChoiceOpen(false)}
+            onAdmin={goAdminLogin}
+            onDemo={goDemoLogin}
+            />
         </>
       )}
     </main>

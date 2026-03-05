@@ -1,47 +1,79 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import AccessChoiceModal from "../AccessChoiceModal";
 import "./navbar.css";
 
 /**
- * Navbar Component
+ * Navbar
  *
- * Behavior:
- * - Always shows Projects link
- * - Shows ONE auth button:
- *    • Login (if not admin)
- *    • Logout (if admin)
- * - Title changes if logged in:
- *    • "Portfolio Tracker – Admin"
+ * - Always: Projects
+ * - One auth button:
+ *   - Login (if logged out) -> opens AccessChoiceModal (Admin or Demo)
+ *   - Logout (if logged in) -> clears auth and goes to /projects
+ *
+ * - Title changes:
+ *   - Portfolio Tracker
+ *   - Portfolio Tracker – Admin (ADMIN)
+ *   - Portfolio Tracker – Demo (DEMO)
+ *
+ * - Removes "Admin" link from navbar (you asked this)
  */
 export default function Navbar() {
   const nav = useNavigate();
-  const { isAdmin, logout } = useAuth();
+  const location = useLocation();
+  const { isAdmin, isDemo, logout } = useAuth();
+
+  // Access choice modal
+  const [choiceOpen, setChoiceOpen] = useState(false);
+
+  const title = isAdmin
+    ? "Portfolio Tracker – Admin"
+    : isDemo
+    ? "Portfolio Tracker – Demo"
+    : "Portfolio Tracker";
 
   /**
-   * Auth button handler:
-   * - If admin → logout and return to projects
-   * - If not admin → go to login page
+   * Where should we return after login?
+   * - From navbar login, we return to whatever page user is currently on.
+   * - Example: /projects/my-app  OR /demo/projects/x (if they were already browsing)
    */
+  function getNextPath() {
+    return location.pathname + location.search;
+  }
+
   function handleAuthClick() {
-    if (isAdmin) {
+    // Logged in -> Logout and return to public projects
+    if (isAdmin || isDemo) {
       logout();
       nav("/projects", { replace: true });
-    } else {
-      nav("/admin/login");
+      return;
     }
+
+    // Logged out -> show choice modal (Admin or Demo)
+    setChoiceOpen(true);
+  }
+
+  function goAdminLogin() {
+    const next = getNextPath();
+    setChoiceOpen(false);
+    nav(`/admin/login?next=${encodeURIComponent(next)}`);
+  }
+
+  function goDemoLogin() {
+    const next = getNextPath();
+    setChoiceOpen(false);
+    nav(`/demo/login?next=${encodeURIComponent(next)}`);
   }
 
   return (
     <header className="navWrap">
       <div className="navInner">
-
-        {/* Brand / Title */}
         <Link className="brand" to="/projects">
-          {isAdmin ? "Portfolio Tracker – Admin" : "Portfolio Tracker"}
+          {title}
         </Link>
 
         <nav className="navLinks">
-          {/* Always visible */}
           <NavLink
             to="/projects"
             className={({ isActive }) => (isActive ? "active" : "")}
@@ -49,16 +81,19 @@ export default function Navbar() {
             Projects
           </NavLink>
 
-          {/* Single Auth Button */}
-          <button
-            type="button"
-            className="navBtn"
-            onClick={handleAuthClick}
-          >
-            {isAdmin ? "Logout" : "Login"}
+          <button type="button" className="navBtn" onClick={handleAuthClick}>
+            {isAdmin || isDemo ? "Logout" : "Login"}
           </button>
         </nav>
       </div>
+
+      {/* Access choice modal (Admin vs Demo) */}
+      <AccessChoiceModal
+        open={choiceOpen}
+        onClose={() => setChoiceOpen(false)}
+        onAdmin={goAdminLogin}
+        onDemo={goDemoLogin}
+      />
     </header>
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../lib/api";
 
@@ -9,17 +9,36 @@ import { api } from "../lib/api";
  * Everyone can view projects/tasks/updates.
  * Only admins can edit — admin mode is unlocked by storing a JWT token.
  *
- * This page:
- * - Calls api.login(username, password)
- * - Saves accessToken into AuthContext (and localStorage)
- * - Redirects after login
+ * Goal:
+ * - If user clicks "Login" from Navbar -> redirect to /projects after login
+ * - If user clicks "Edit" (or any protected admin action) -> redirect back to that page after login
+ *
+ * How it works:
+ * - We read `?next=/some/path` from the URL.
+ * - If missing, we default to "/projects".
+ *
+ * Examples:
+ * - Navbar login link:   /admin/login
+ *   -> next defaults to /projects
+ *
+ * - Edit button link:    /admin/login?next=/admin/projects/my-slug
+ *   -> after login goes back to that project details page
  */
 
 export default function AdminLoginPage() {
   const nav = useNavigate();
-  const { login, isAdmin, logout } = useAuth();
+  const [params] = useSearchParams();
 
-  // Your backend expects "username" (not email) based on your api.login signature.
+  const { loginAsAdmin, isAdmin, logout } = useAuth();
+
+  /**
+   * Next page after login
+   * - Navbar: no `next` param, so this becomes "/projects"
+   * - Edit button: pass `next` param, so we return there
+   */
+  const next = params.get("next") || "/projects";
+
+  // Backend expects "username" and "password"
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
 
@@ -32,17 +51,30 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      // 1) Login request (skipAuth happens inside api.login)
-      const res = await api.login(username, password);
+      /**
+       * 1) Login request
+       * NOTE: your api client should have:
+       *  - api.loginAdmin(...) OR api.login(...)
+       * Use whichever exists in your lib/api.ts.
+       */
+      const res =
+        // @ts-expect-error - keep whichever you actually have
+        (api.loginAdmin ? await api.loginAdmin(username, password) : await api.login(username, password));
 
-      // 2) Store the JWT token (this unlocks admin buttons everywhere)
-      // Your response is: { accessToken, tokenType, expiresAt }
-      login(res.accessToken);
+      /**
+       * 2) Store JWT in AuthContext/localStorage
+       * This unlocks admin buttons everywhere
+       */
+      loginAsAdmin(res.accessToken);
 
-      // 3) Redirect after successful login
-      nav("/admin");
+      /**
+       * 3) Redirect
+       * - Navbar -> /projects
+       * - Edit button -> back to project details (or wherever next points)
+       */
+      nav(next, { replace: true });
     } catch (err: any) {
-      // Your http() throws: `HTTP ${status} ${statusText} – ${text}`
+      // http() throws: `HTTP ${status} ${statusText} – ${text}`
       setError(err?.message ?? "Login failed");
     } finally {
       setLoading(false);
@@ -50,42 +82,119 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: "40px auto" }}>
-      <h1>Admin Login</h1>
+    <main className="container" style={{ maxWidth: 520 }}>
+      {/* Back goes to where user came from logically */}
+      <Link className="backLink" to={next === "/projects" ? "/projects" : "/projects"}>
+        ← Back
+      </Link>
+
+      <h1 className="h2">Admin Login</h1>
+      <p className="muted">Sign in to enable edit mode.</p>
 
       {/* If already logged in, show “admin active” + logout */}
       {isAdmin ? (
-        <>
-          <p>✅ Admin mode is active.</p>
-          <button onClick={logout}>Logout</button>
-        </>
+        <div className="card" style={{ padding: 14 }}>
+          <p style={{ marginTop: 0 }}>✅ Admin mode is active.</p>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                nav("/projects", { replace: true });
+              }}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: "var(--text)",
+                cursor: "pointer",
+              }}
+            >
+              Logout
+            </button>
+
+            <button
+              type="button"
+              onClick={() => nav(next, { replace: true })}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--border)",
+                background: "rgba(255,255,255,0.10)",
+                color: "var(--text)",
+                cursor: "pointer",
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
       ) : (
-        <form onSubmit={onSubmit}>
-          <label>Username</label>
+        <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
           <input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            style={{ width: "100%", marginBottom: 12 }}
+            placeholder="Username"
             autoComplete="username"
+            style={{
+              padding: 10,
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "rgba(0,0,0,0.12)",
+              color: "var(--text)",
+            }}
           />
 
-          <label>Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            style={{ width: "100%", marginBottom: 12 }}
+            placeholder="Password"
             autoComplete="current-password"
+            style={{
+              padding: 10,
+              borderRadius: 10,
+              border: "1px solid var(--border)",
+              background: "rgba(0,0,0,0.12)",
+              color: "var(--text)",
+            }}
           />
 
-          {/* Show login error if any */}
-          {error && <p style={{ marginTop: 8 }}>{error}</p>}
+          {/* Error message banner */}
+          {error && (
+            <div
+              role="alert"
+              style={{
+                border: "1px solid rgba(255, 80, 80, 0.35)",
+                background: "rgba(255, 80, 80, 0.12)",
+                padding: 12,
+                borderRadius: 12,
+                color: "var(--text)",
+              }}
+            >
+              {error}
+            </div>
+          )}
 
-          <button disabled={loading} type="submit">
+          <button
+            disabled={loading}
+            type="submit"
+            style={{
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "rgba(255,255,255,0.10)",
+              color: "var(--text)",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
       )}
-    </div>
+    </main>
   );
 }

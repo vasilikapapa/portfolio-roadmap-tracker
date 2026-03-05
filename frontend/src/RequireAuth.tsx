@@ -1,44 +1,35 @@
-import { Navigate, useLocation } from "react-router-dom";
-import { isAdmin } from "./lib/auth";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
 
 /**
- * ==========================================
- * RequireAuth Component
- * ==========================================
+ * RequireAuth
  *
- * Purpose:
- * - Protects routes that require authentication
- * - Redirects unauthenticated users to login page
- * - Preserves intended destination for post-login redirect
+ * Protects routes by role.
  *
- * Usage:
- * Wrap protected routes like:
- *
- * <RequireAuth>
- *   <ProtectedPage />
- * </RequireAuth>
+ * Behavior:
+ * - ADMIN routes → redirect to /admin/login
+ * - DEMO routes → redirect to /projects (public site)
  */
-export default function RequireAuth({ children }: { children: React.ReactNode }) {
+export default function RequireAuth({
+  allow,
+  children,
+}: {
+  allow: Array<"ADMIN" | "DEMO">;
+  children: React.ReactNode;
+}) {
+  const { isAdmin, isDemo } = useAuth();
 
-  // Current route location (used for redirect after login)
-  const loc = useLocation();
+  const roleOk =
+    (allow.includes("ADMIN") && isAdmin) ||
+    (allow.includes("DEMO") && isDemo);
 
-  /**
-   * If user is not authenticated:
-   * - Redirect to admin login page
-   * - Save attempted path in state ("from")
-   *   so login flow can redirect back after success.
-   */
-  if (!isAdmin()) {
-    return (
-      <Navigate
-        to="/admin/login"
-        replace
-        state={{ from: loc.pathname }}
-      />
-    );
+  if (roleOk) return <>{children}</>;
+
+  // DEMO routes → send user to public projects
+  if (allow.includes("DEMO")) {
+    return <Navigate to="/projects" replace />;
   }
 
-  // User authenticated → render protected content
-  return <>{children}</>;
+  // ADMIN routes → login
+  return <Navigate to="/admin/login" replace />;
 }

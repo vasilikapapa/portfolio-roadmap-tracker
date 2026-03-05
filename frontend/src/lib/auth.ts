@@ -1,30 +1,31 @@
 /**
  * auth.ts
  * Very small “auth storage” layer:
- * - We store an admin JWT token in localStorage
+ * - keps token+role in localStorage
  * - Presence of a token = "admin mode" in the UI
- *
- * (Backend must still enforce security; UI alone is not protection.)
  */
 
-const TOKEN_KEY = "admin_token";
+export type AuthRole = "ADMIN" | "DEMO";
 
-/** Read token from localStorage (or null if not logged in). */
+const TOKEN_KEY = "pt_token";
+const ROLE_KEY = "pt_role";
+
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-/** Save token to localStorage. */
-export function setToken(token: string) {
+export function getRole(): AuthRole | null {
+  const v = localStorage.getItem(ROLE_KEY);
+  return v === "ADMIN" || v === "DEMO" ? v : null;
+}
+
+export function setAuth(token: string, role: AuthRole) {
   localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(ROLE_KEY, role);
 }
 
-/** Remove token from localStorage (logout). */
-export function clearToken() {
+export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
-}
-
-/** Simple UI check: if token exists, treat user as admin. */
-export function isAdmin(): boolean {
-  return Boolean(getToken());
+  localStorage.removeItem(ROLE_KEY);
 }
