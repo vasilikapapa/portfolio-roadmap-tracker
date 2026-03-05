@@ -1,12 +1,16 @@
 package com.vasilika.portfoliotracker.service.query;
 
+import com.vasilika.portfoliotracker.domain.Project;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
 import com.vasilika.portfoliotracker.domain.enums.TaskType;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
-import com.vasilika.portfoliotracker.web.dto.*;
+import com.vasilika.portfoliotracker.web.dto.PageDto;
+import com.vasilika.portfoliotracker.web.dto.ProjectDetailsDto;
+import com.vasilika.portfoliotracker.web.dto.ProjectDetailsPagedDto;
+import com.vasilika.portfoliotracker.web.dto.ProjectDto;
 import com.vasilika.portfoliotracker.web.mapper.ProjectMapper;
 import com.vasilika.portfoliotracker.web.mapper.TaskMapper;
 import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
@@ -14,6 +18,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -21,18 +26,24 @@ import java.util.Locale;
  * Project Query Service
  * =========================================
  *
- * Handles read-only operations for:
+ * Handles READ-ONLY operations for projects:
  * - Listing projects
  * - Retrieving project details
  * - Filtering and paginating tasks
- * - Paginating project updates
+ * - Paginating updates
  *
- * This service is typically used by public
- * (non-admin) endpoints.
+ *  IMPORTANT: This service supports TWO "tenants":
+ * -------------------------------------------------
+ * 1) Public portfolio data (demo=false)
+ * 2) Demo sandbox data (demo=true)
+ *
+ * We keep these separate so:
+ * - Demo users can freely CRUD without touching real data
  *
  * Separation of responsibilities:
- * - Admin service = write operations
- * - Query service = read operations
+ * - Admin services/controllers = write operations for real projects
+ * - Demo controllers/services  = write operations for demo sandbox
+ * - Query service              = read operations for both, via explicit methods
  */
 @Service
 public class ProjectQueryService {
@@ -50,22 +61,26 @@ public class ProjectQueryService {
         this.updates = updates;
     }
 
+    // =========================================================
+    // PUBLIC (REAL PORTFOLIO) READS  -> demo=false
+    // =========================================================
+
     /**
-     * Returns all projects as DTOs.
+     * Returns all PUBLIC portfolio projects (demo projects excluded).
      *
      * Used for:
      * - Portfolio overview page
      * - Public project listing
      */
-    public java.util.List<ProjectDto> listProjects() {
-        return projects.findAll()
+    public List<ProjectDto> listPublicProjects() {
+        return projects.findAllByDemoFalseOrderByCreatedAtDesc()
                 .stream()
                 .map(ProjectMapper::toDto)
                 .toList();
     }
 
     /**
-     * Retrieves full project details by slug.
+     * Retrieves PUBLIC project details by slug (demo projects excluded).
      *
      * Includes:
      * - All tasks (sorted by status + creation time)
@@ -73,13 +88,12 @@ public class ProjectQueryService {
      *
      * This version loads everything without pagination.
      */
-    public ProjectDetailsDto getDetails(String slug) {
-
-        var project = projects.findBySlug(slug).orElseThrow();
+    public ProjectDetailsDto getPublicDetails(String slug) {
+        Project project = requireProjectBySlugAndDemo(slug, false);
 
         // Sort tasks by:
-        // 1. Status order
-        // 2. Creation time (ascending)
+        // 1) Status order
+        // 2) Creation time (ascending)
         var taskDtos = tasks.findByProject_Id(project.getId()).stream()
                 .sorted((a, b) -> {
                     int sa = a.getStatus().ordinal();
@@ -105,19 +119,14 @@ public class ProjectQueryService {
     }
 
     /**
-     * Retrieves project details with pagination and optional filtering.
+     * Retrieves PUBLIC project details with pagination and optional task filtering.
      *
      * Supports:
      * - Task filtering (status, type, priority)
      * - Pagination for tasks
      * - Pagination for updates
-     *
-     * Useful for:
-     * - Large projects
-     * - Infinite scroll
-     * - API efficiency
      */
-    public ProjectDetailsPagedDto getDetailsPaged(
+    public ProjectDetailsPagedDto getPublicDetailsPaged(
             String slug,
             String status,
             String type,
@@ -127,8 +136,7 @@ public class ProjectQueryService {
             int updatesPage,
             int updatesSize
     ) {
-
-        var project = projects.findBySlug(slug).orElseThrow();
+        Project project = requireProjectBySlugAndDemo(slug, false);
 
         // Parse optional enum filters
         TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
@@ -168,6 +176,117 @@ public class ProjectQueryService {
                 tasksDto,
                 updatesDto
         );
+    }
+
+    // =========================================================
+    // DEMO (SANDBOX) READS -> demo=true
+    // =========================================================
+    // These are used by /demo/** endpoints (protected by ROLE_DEMO).
+    // You can keep your demo controllers simple and call these.
+
+    /**
+     * Returns all DEMO sandbox projects (only demo=true).
+     * Useful for a demo-only projects list page if you want one.
+     */
+    public List<ProjectDto> listDemoProjects() {
+        return projects.findAllByDemoTrueOrderByCreatedAtDesc()
+                .stream()
+                .map(ProjectMapper::toDto)
+                .toList();
+    }
+
+    /**
+     * Returns demo project details by slug (demo=true).
+     * Same shape as public details.
+     */
+    public ProjectDetailsDto getDemoDetails(String slug) {
+        Project project = requireProjectBySlugAndDemo(slug, true);
+
+        var taskDtos = tasks.findByProject_Id(project.getId()).stream()
+                .sorted((a, b) -> {
+                    int sa = a.getStatus().ordinal();
+                    int sb = b.getStatus().ordinal();
+                    if (sa != sb) return Integer.compare(sa, sb);
+                    return a.getCreatedAt().compareTo(b.getCreatedAt());
+                })
+                .map(TaskMapper::toDto)
+                .toList();
+
+        var updateDtos = updates
+                .findByProject_IdOrderByCreatedAtDesc(project.getId())
+                .stream()
+                .map(UpdateMapper::toDto)
+                .toList();
+
+        return new ProjectDetailsDto(
+                ProjectMapper.toDto(project),
+                taskDtos,
+                updateDtos
+        );
+    }
+
+    /**
+     * Returns demo project details with pagination and filtering (demo=true).
+     */
+    public ProjectDetailsPagedDto getDemoDetailsPaged(
+            String slug,
+            String status,
+            String type,
+            String priority,
+            int tasksPage,
+            int tasksSize,
+            int updatesPage,
+            int updatesSize
+    ) {
+        Project project = requireProjectBySlugAndDemo(slug, true);
+
+        TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
+        TaskType ty = type == null ? null : parseEnum(TaskType.class, type);
+        TaskPriority pr = priority == null ? null : parseEnum(TaskPriority.class, priority);
+
+        Pageable tp = PageRequest.of(tasksPage, tasksSize);
+        var taskPage = tasks.findPagedForProject(project.getId(), st, ty, pr, tp);
+
+        Pageable up = PageRequest.of(updatesPage, updatesSize);
+        var updatePage = updates.findByProject_IdOrderByCreatedAtDesc(project.getId(), up);
+
+        var tasksDto = new PageDto<>(
+                taskPage.getContent().stream().map(TaskMapper::toDto).toList(),
+                taskPage.getNumber(),
+                taskPage.getSize(),
+                taskPage.getTotalElements(),
+                taskPage.getTotalPages(),
+                taskPage.hasNext()
+        );
+
+        var updatesDto = new PageDto<>(
+                updatePage.getContent().stream().map(UpdateMapper::toDto).toList(),
+                updatePage.getNumber(),
+                updatePage.getSize(),
+                updatePage.getTotalElements(),
+                updatePage.getTotalPages(),
+                updatePage.hasNext()
+        );
+
+        return new ProjectDetailsPagedDto(
+                ProjectMapper.toDto(project),
+                tasksDto,
+                updatesDto
+        );
+    }
+
+    // =========================================================
+    // Helpers
+    // =========================================================
+
+    /**
+     * Loads a project by (slug, demo flag) or throws if missing.
+     *
+     * This is the core rule that prevents public APIs from leaking demo data.
+     */
+    private Project requireProjectBySlugAndDemo(String slug, boolean demo) {
+        return projects.findBySlugAndDemo(slug, demo)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + slug));
     }
 
     /**

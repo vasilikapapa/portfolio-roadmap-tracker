@@ -10,102 +10,143 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * =========================================
+ * ==========================================================
  * Spring Security Configuration
- * =========================================
+ * ==========================================================
  *
- * Purpose:
- * - Secures API endpoints using JWT authentication
- * - Allows public access to selected endpoints
- * - Restricts admin routes by role
- * - Configures stateless authentication (no sessions)
+ * Architecture:
  *
- * This setup is typical for modern REST APIs:
- * frontend authenticates once → receives JWT →
- * sends token with each request.
+ * 1) PUBLIC (no auth required)
+ *    - View portfolio projects
+ *    - Swagger docs
+ *    - Health endpoint
+ *
+ * 2) DEMO (ROLE_DEMO)
+ *    - Full CRUD inside sandbox tenant
+ *    - Can reset demo data
+ *
+ * 3) ADMIN (ROLE_ADMIN)
+ *    - Full CRUD on real portfolio data
+ *
+ * Security Model:
+ * - Stateless (JWT-based)
+ * - No sessions
+ * - Frontend sends Bearer token on each request
  */
 @Configuration
 public class SecurityConfig {
 
     /**
-     * Main Spring Security filter chain configuration.
+     * Main Spring Security filter chain.
      *
-     * Defines:
-     * - CORS support
-     * - CSRF behavior
-     * - Session policy
-     * - Endpoint authorization rules
-     * - JWT authentication setup
+     * Configures:
+     * - CORS
+     * - CSRF disabled (stateless API)
+     * - Stateless session policy
+     * - Route authorization rules
+     * - JWT validation
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-
+        System.out.println("DEMO LOGIN PERMIT ALL ACTIVE");
         http
                 /**
-                 * Enable CORS so frontend apps
-                 * (React, Vite, etc.) can call this API.
+                 * Enable CORS so frontend apps (React/Vite)
+                 * can call this backend from a different origin.
                  */
                 .cors(cors -> {})
 
                 /**
-                 * Disable CSRF because:
+                 * Disable CSRF:
                  * - This is a stateless REST API
-                 * - JWT protects requests instead of sessions
+                 * - JWT protects endpoints instead of cookies/sessions
                  */
                 .csrf(csrf -> csrf.disable())
 
                 /**
                  * Stateless session management:
-                 * No HTTP session stored on server.
-                 * Each request must include JWT token.
+                 * - Server does NOT store sessions
+                 * - Each request must include JWT
                  */
                 .sessionManagement(sm ->
-                        sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
 
                 /**
-                 * Authorization rules for endpoints.
+                 * Authorization rules (order matters!)
                  */
                 .authorizeHttpRequests(auth -> auth
 
                         /**
-                         * Allow Swagger/OpenAPI docs publicly
-                         * (useful for development and recruiters).
+                         * -------------------------------------------------
+                         * 1️  PUBLIC ENDPOINTS
+                         * -------------------------------------------------
                          */
+
+
+                        // Swagger / OpenAPI docs (public for recruiters/dev)
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
 
-                        /**
-                         * Allow login endpoint without authentication.
-                         */
-                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-
-                        /**
-                         * Public GET endpoints (portfolio viewing).
-                         */
-                        .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
-
-                        /**
-                         * Health check endpoint for deployment platforms.
-                         */
+                        // Health endpoint (used by Render / deployment platforms)
                         .requestMatchers(HttpMethod.GET, "/health").permitAll()
 
+                        // Login endpoint (no auth required)
+                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
+
+                        //Demo login (public)
+                        .requestMatchers(HttpMethod.POST, "/auth/demo/login").permitAll()
+
+                        // (Optional) “test” login (public) – only if you add it
+                        // .requestMatchers(HttpMethod.POST, "/auth/test").permitAll()
+
+                        // Public read endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
+
+                        // Health endpoint
+                        .requestMatchers(HttpMethod.GET, "/health").permitAll()
+
+
+
+                /**
+                         * -------------------------------------------------
+                         * 2️ DEMO SANDBOX (ROLE_DEMO)
+                         * -------------------------------------------------
+                         *
+                         * - Isolated CRUD environment
+                         * - Safe for recruiters to experiment
+                         * - Cannot affect real portfolio data
+                         */
+                        .requestMatchers("/demo/**").hasRole("DEMO")
+
                         /**
-                         * Admin-only endpoints require ADMIN role.
+                         * -------------------------------------------------
+                         * 3️REAL ADMIN (ROLE_ADMIN)
+                         * -------------------------------------------------
+                         *
+                         * - Full control over real portfolio data
                          */
                         .requestMatchers("/admin/**").hasRole("ADMIN")
 
                         /**
-                         * All other endpoints require authentication.
+                         * -------------------------------------------------
+                         * 4️All other routes require authentication
+                         * -------------------------------------------------
                          */
                         .anyRequest().authenticated()
+
                 )
 
                 /**
-                 * Configure JWT-based authentication.
-                 * Spring validates tokens automatically.
+                 * JWT Resource Server Configuration
+                 *
+                 * Spring:
+                 * - Validates signature
+                 * - Validates expiration
+                 * - Extracts roles
                  */
                 .oauth2ResourceServer(oauth ->
                         oauth.jwt(jwt ->
@@ -114,8 +155,10 @@ public class SecurityConfig {
                 )
 
                 /**
-                 * Disable default authentication methods
-                 * since JWT is used instead.
+                 * Disable default login methods:
+                 * - No form login
+                 * - No basic auth
+                 * We only use JWT.
                  */
                 .httpBasic(b -> b.disable())
                 .formLogin(f -> f.disable());
@@ -124,27 +167,30 @@ public class SecurityConfig {
     }
 
     /**
-     * Converts JWT claims into Spring Security authorities.
+     * Converts JWT "roles" claim into Spring Security authorities.
      *
-     * Example:
-     * JWT contains:
+     * Example JWT payload:
+     * {
+     *   "sub": "admin",
      *   "roles": ["ADMIN"]
+     * }
      *
-     * Spring interprets as:
-     *   ROLE_ADMIN
+     * Spring automatically converts:
+     *   ADMIN  -> ROLE_ADMIN
      *
-     * This allows use of:
+     * This enables:
      *   hasRole("ADMIN")
+     *   hasRole("DEMO")
      */
     @Bean
     public JwtAuthenticationConverter jwtAuthConverter() {
 
         JwtGrantedAuthoritiesConverter gac = new JwtGrantedAuthoritiesConverter();
 
-        // Claim name in JWT containing roles
+        // The claim name inside JWT that contains role list
         gac.setAuthoritiesClaimName("roles");
 
-        // Prefix required by Spring Security
+        // Spring requires ROLE_ prefix internally
         gac.setAuthorityPrefix("ROLE_");
 
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();

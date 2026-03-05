@@ -1,13 +1,12 @@
 package com.vasilika.portfoliotracker.repo;
 
 import com.vasilika.portfoliotracker.domain.Task;
-import org.springframework.data.jpa.repository.JpaRepository;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
 import com.vasilika.portfoliotracker.domain.enums.TaskType;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,13 +21,15 @@ import java.util.UUID;
  * Spring Data JPA repository for Task entities.
  *
  * Responsibilities:
- * - Basic CRUD operations (provided by JpaRepository)
- * - Project-based task retrieval
- * - Filtering by status, type, priority
- * - Custom paginated query with sorting logic
+ * - Basic CRUD operations (via JpaRepository)
+ * - Retrieve tasks by project
+ * - Optional filtering by status/type/priority
+ * - Paginated query for Kanban-style task boards
  *
- * This repository supports both simple derived
- * queries and a custom JPQL query for flexible filtering.
+ * NOTE:
+ * - We do NOT use tenantKey here because your entities
+ *   do not contain tenantKey.
+ * - Demo separation is handled at the Project level via Project.demo.
  */
 public interface TaskRepository extends JpaRepository<Task, UUID> {
 
@@ -37,41 +38,20 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
      */
     List<Task> findByProject_Id(UUID projectId);
 
-    // ===== Optional filtering methods =====
+    // ===== Optional derived filtering queries (handy for services) =====
 
-    /**
-     * Filter tasks by project and status.
-     */
     List<Task> findByProject_IdAndStatus(UUID projectId, TaskStatus status);
 
-    /**
-     * Filter tasks by project and type.
-     */
     List<Task> findByProject_IdAndType(UUID projectId, TaskType type);
 
-    /**
-     * Filter tasks by project and priority.
-     */
     List<Task> findByProject_IdAndPriority(UUID projectId, TaskPriority priority);
 
-    /**
-     * Filter by project, status, and type.
-     */
     List<Task> findByProject_IdAndStatusAndType(UUID projectId, TaskStatus status, TaskType type);
 
-    /**
-     * Filter by project, status, and priority.
-     */
     List<Task> findByProject_IdAndStatusAndPriority(UUID projectId, TaskStatus status, TaskPriority priority);
 
-    /**
-     * Filter by project, type, and priority.
-     */
     List<Task> findByProject_IdAndTypeAndPriority(UUID projectId, TaskType type, TaskPriority priority);
 
-    /**
-     * Filter by project, status, type, and priority.
-     */
     List<Task> findByProject_IdAndStatusAndTypeAndPriority(
             UUID projectId,
             TaskStatus status,
@@ -83,17 +63,10 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
      * Custom paginated query with optional filters.
      *
      * Features:
-     * - Supports pagination via Pageable
-     * - Optional filtering:
-     *   - status
-     *   - type
-     *   - priority
-     * - Custom ordering:
-     *   BACKLOG → IN_PROGRESS → DONE
-     *   then by creation time ascending
-     *
-     * Useful for displaying roadmap tasks
-     * in a structured development workflow.
+     * - Optional filtering by status/type/priority
+     * - Orders by Kanban column order:
+     *   BACKLOG -> IN_PROGRESS -> DONE
+     * - Then by creation time ascending (stable ordering in each column)
      */
     @Query("""
       select t from Task t
@@ -117,5 +90,5 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
             @Param("priority") TaskPriority priority,
             Pageable pageable
     );
-
+    List<Task> findAllByProject_DemoTrue(); // for reset
 }

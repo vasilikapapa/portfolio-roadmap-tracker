@@ -111,6 +111,7 @@ public class Task {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+
     // ===== Getters and Setters =====
 
     public UUID getId() { return id; }

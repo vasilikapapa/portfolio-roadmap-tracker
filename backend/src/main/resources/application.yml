@@ -27,6 +27,9 @@ app:
     admin:
       username: ${APP_ADMIN_USER}                 # Admin login username
       password-hash: ${APP_ADMIN_PASS_HASH}       # BCrypt hashed admin password
+    demo:
+      username: ${APP_DEMO_USERNAME:demo}
+      password-hash: ${APP_DEMO_PASSWORD_HASH:$2a$10$oUcyj97f57/ZOa/puVHZJubEoLFDbj7CkomnEu5NVIesb69JUX27W}
 
     cors:
       origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}

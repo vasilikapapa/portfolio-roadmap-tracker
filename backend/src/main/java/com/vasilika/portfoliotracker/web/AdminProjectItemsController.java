@@ -45,8 +45,8 @@ public class AdminProjectItemsController {
     public ResponseEntity<Project> createProject(@Valid @RequestBody CreateProjectRequest req) {
         String slug = req.slug().trim();
 
-        // Prevent duplicate slugs (unique key in DB is good too, but this gives a nicer 400)
-        if (projects.existsBySlug(slug)) {
+        // Admin creates REAL projects only (demo = false)
+        if (projects.existsBySlugAndDemo(slug, false)) {
             throw new IllegalArgumentException("Slug already exists: " + slug);
         }
 
@@ -61,6 +61,7 @@ public class AdminProjectItemsController {
         p.setLiveUrl(req.liveUrl());
         p.setCreatedAt(Instant.now());
         p.setUpdatedAt(Instant.now());
+        p.setDemo(false);
 
         Project saved = projects.save(p);
 
@@ -173,7 +174,7 @@ public class AdminProjectItemsController {
         if (req.slug() != null && !req.slug().trim().equalsIgnoreCase(p.getSlug())) {
             String newSlug = req.slug().trim();
 
-            if (projects.existsBySlug(newSlug)) {
+            if (projects.existsBySlugAndDemo(newSlug, false)) {
                 throw new IllegalArgumentException("Slug already exists: " + newSlug);
             }
 

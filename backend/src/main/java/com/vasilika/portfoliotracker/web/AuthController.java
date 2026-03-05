@@ -11,61 +11,59 @@ import org.springframework.web.bind.annotation.*;
  * Authentication Controller
  * =========================================
  *
- * Handles authentication endpoints.
+ * Endpoints:
+ * - POST /auth/login  -> ADMIN login (username/password)
+ * - POST /auth/demo-login   -> DEMO login (no password, public)
  *
- * Responsibilities:
- * - Accept login credentials
- * - Validate input
- * - Delegate authentication to AuthService
- * - Return JWT access token on success
- *
- * Base path:
- *   /auth
+ * Notes:
+ * - Demo token is safe because demo endpoints are sandboxed
+ *   (they only affect Project.demo=true data).
  */
-@RestController
-@RequestMapping("/auth")
-public class AuthController {
 
-    private final AuthService authService;
+
 
     /**
-     * Constructor injection of authentication service.
+     * Auth Controller
+     *
+     * /auth/login      -> ADMIN login
+     * /auth/demo/login -> DEMO login (sandbox)
      */
-    public AuthController(AuthService authService) {
-        this.authService = authService;
+    @RestController
+    @RequestMapping("/auth")
+    public class AuthController {
+
+        private final AuthService authService;
+        public AuthController(AuthService authService) {
+            this.authService = authService;
+        }
+
+        public record LoginRequest(
+                @NotBlank String username,
+                @NotBlank String password
+        ) {}
+
+        /** ADMIN login */
+        @PostMapping("/login")
+        public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
+            return ResponseEntity.ok(authService.loginAdmin(req.username(), req.password()));
+        }
+
+        /** DEMO login */
+        @PostMapping("/demo/login")
+        public ResponseEntity<?> demoLogin(@Valid @RequestBody LoginRequest req) {
+
+            return ResponseEntity.ok(authService.loginDemo(req.username(), req.password()));
+        }
     }
 
     /**
-     * Login request DTO used only by this controller.
+     * (Optional) a separate "TEST" role later:
      *
-     * Validation:
-     * - Username must not be blank
-     * - Password must not be blank
+     * POST /auth/test
+     *
+     * Disabled until we add Security rules + endpoints.
      */
-    public record LoginRequest(
-            @NotBlank String username,
-            @NotBlank String password
-    ) {}
-
-    /**
-     * Authenticates user and returns JWT token.
-     *
-     * HTTP Method: POST
-     * Endpoint: /auth/login
-     *
-     * Request:
-     * - Username and password
-     *
-     * Response:
-     * - JWT access token
-     * - Token type
-     * - Expiration timestamp
-     */
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest req) {
-
-        return ResponseEntity.ok(
-                authService.login(req.username(), req.password())
-        );
-    }
-}
+    // @PostMapping("/test")
+    // public ResponseEntity<?> testLogin() {
+    //     return ResponseEntity.ok(authService.testLogin());
+    // }

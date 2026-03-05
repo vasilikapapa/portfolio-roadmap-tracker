@@ -6,20 +6,22 @@ import com.vasilika.portfoliotracker.web.dto.ProjectDetailsPagedDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDto;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * =========================================
  * Public Projects Controller
  * =========================================
  *
- * Exposes public read-only endpoints for projects.
+ * Exposes public READ-ONLY endpoints for projects.
  *
- * Responsibilities:
- * - List projects for portfolio display
- * - Retrieve project details
- * - Provide paginated project data
+ * IMPORTANT SECURITY / PRODUCT RULE
+ * -----------------------------------
+ * This controller must NEVER return DEMO sandbox projects.
  *
- * These endpoints are intentionally public
- * and do not require authentication.
+ * Demo projects are only accessible through /demo/** endpoints
+ * and require a DEMO token. This ensures:
+ * - Demo users can freely edit demo data without affecting real data
  *
  * Base path:
  *   /api/projects
@@ -38,22 +40,23 @@ public class PublicProjectsController {
     }
 
     /**
-     * Returns all projects.
+     * Returns all PUBLIC portfolio projects (demo projects are excluded).
      *
      * HTTP Method: GET
      * Endpoint: /api/projects
      *
      * Used for:
      * - Portfolio homepage
-     * - Project listings
+     * - Public project listings
      */
     @GetMapping
-    public java.util.List<ProjectDto> list() {
-        return query.listProjects();
+    public List<ProjectDto> list() {
+        // Only real portfolio projects (demo=false)
+        return query.listPublicProjects();
     }
 
     /**
-     * Returns full project details by slug.
+     * Returns full PUBLIC project details by slug (demo projects are excluded).
      *
      * HTTP Method: GET
      * Endpoint: /api/projects/{slug}
@@ -65,12 +68,13 @@ public class PublicProjectsController {
      */
     @GetMapping("/{slug}")
     public ProjectDetailsDto details(@PathVariable String slug) {
-        return query.getDetails(slug);
+        // Only real portfolio projects (demo=false)
+        return query.getPublicDetails(slug);
     }
 
     /**
-     * Returns project details with pagination
-     * and optional filtering.
+     * Returns PUBLIC project details with pagination and optional filtering.
+     * Demo projects are excluded.
      *
      * HTTP Method: GET
      * Endpoint: /api/projects/{slug}/paged
@@ -94,7 +98,8 @@ public class PublicProjectsController {
             @RequestParam(defaultValue = "0") int updatesPage,
             @RequestParam(defaultValue = "5") int updatesSize
     ) {
-        return query.getDetailsPaged(
+        // Only real portfolio projects (demo=false)
+        return query.getPublicDetailsPaged(
                 slug,
                 status,
                 type,

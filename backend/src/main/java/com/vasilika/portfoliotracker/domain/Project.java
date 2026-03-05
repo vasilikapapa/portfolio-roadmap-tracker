@@ -27,8 +27,11 @@ public class Project {
     /**
      * URL-friendly unique identifier (e.g. "workout-app").
      * Used for clean URLs and lookups instead of exposing UUIDs.
+     * IMPORTANT:
+     *  - Slug is NOT globally unique anymore.
+     *  - Uniqueness is enforced by DB as (demo, slug).
      */
-    @Column(nullable = false, unique = true, length = 120)
+    @Column(nullable = false, length = 120)
     private String slug;
 
     /**
@@ -104,6 +107,16 @@ public class Project {
     }
 
 
+    /**
+     * Demo flag:
+     * - true  = project belongs to the demo sandbox
+     * - false = real portfolio project
+     */
+    @Column(nullable = false)
+    private boolean demo = false;
+
+    public boolean isDemo() { return demo; }
+    public void setDemo(boolean demo) { this.demo = demo; }
 
     // ===== Getters & Setters =====
 
@@ -136,4 +149,5 @@ public class Project {
 
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
 }
