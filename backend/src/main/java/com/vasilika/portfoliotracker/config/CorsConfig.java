@@ -44,13 +44,10 @@ public class CorsConfig {
                          * - Local Vite frontend (default port 5173)
                          * - Local React frontend (port 3000)
                          * - Production frontend deployed on Vercel
-                         *
-                         * ⚠ Replace YOUR-VERCEL-DOMAIN with your actual deployed URL
-                         */
                         .allowedOrigins(
                                 "http://localhost:5173",
                                 "http://localhost:3000",
-                                "https://YOUR-VERCEL-DOMAIN.vercel.app"
+                                "https://portfolio-roadmap-tracker.vercel.app/projects"
                         )
 
                         /**
