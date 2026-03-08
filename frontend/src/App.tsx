@@ -12,7 +12,6 @@ import DemoLoginPage from "./pages/DemoLoginPage";
 import DemoHomePage from "./pages/DemoHomePage";
 import DemoProjectDetailsPage from "./pages/DemoProjectsDetailsPage";
 
-import AuthGatePage from "./pages/AuthGatePage";
 
 // Use ONE admin guard approach
 import RequireAuth from "./RequireAuth";
@@ -36,8 +35,6 @@ export default function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:slug" element={<ProjectDetailsPage />} />
 
-        {/* AUTH GATE (optional helper page) */}
-        <Route path="/auth-gate" element={<AuthGatePage />} />
 
         {/* ADMIN */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
