@@ -7,26 +7,34 @@ import "./navbar.css";
 /**
  * Navbar
  *
- * - Always: Projects
- * - One auth button:
- *   - Login (if logged out) -> opens AccessChoiceModal (Admin or Demo)
- *   - Logout (if logged in) -> clears auth and goes to /projects
+ * Features:
+ * - Brand title changes depending on mode:
+ *      Portfolio Tracker
+ *      Portfolio Tracker – Admin
+ *      Portfolio Tracker – Demo
  *
- * - Title changes:
- *   - Portfolio Tracker
- *   - Portfolio Tracker – Admin (ADMIN)
- *   - Portfolio Tracker – Demo (DEMO)
+ * - "Projects" link destination:
+ *      Public/Admin -> /projects
+ *      Demo         -> /demo
  *
- * - Removes "Admin" link from navbar (you asked this)
+ * - Login button:
+ *      Opens modal to choose Admin or Demo login
+ *
+ * - Logout button:
+ *      Clears auth and returns to public projects
  */
+
 export default function Navbar() {
   const nav = useNavigate();
   const location = useLocation();
   const { isAdmin, isDemo, logout } = useAuth();
 
-  // Access choice modal
+  // Modal state for Admin vs Demo login choice
   const [choiceOpen, setChoiceOpen] = useState(false);
 
+  /**
+   * Navbar title changes based on current auth mode.
+   */
   const title = isAdmin
     ? "Portfolio Tracker – Admin"
     : isDemo
@@ -34,34 +42,69 @@ export default function Navbar() {
     : "Portfolio Tracker";
 
   /**
-   * Where should we return after login?
-   * - From navbar login, we return to whatever page user is currently on.
-   * - Example: /projects/my-app  OR /demo/projects/x (if they were already browsing)
+   * Determine where the Projects link should go.
+   * Demo users should stay inside the sandbox.
+   */
+  const projectsPath = isDemo ? "/demo" : "/projects";
+
+  /**
+   * Determine return path after login.
+   * Keeps the user on the same page after authentication.
    */
   function getNextPath() {
     return location.pathname + location.search;
   }
 
+  /**
+   * Auth button behavior:
+   *
+   * If logged in:
+   *      logout and return to public projects
+   *
+   * If logged out:
+   *      open login choice modal
+   */
   function handleAuthClick() {
-    // Logged in -> Logout and return to public projects
     if (isAdmin || isDemo) {
       logout();
       nav("/projects", { replace: true });
       return;
     }
 
-    // Logged out -> show choice modal (Admin or Demo)
     setChoiceOpen(true);
   }
 
+  /**
+   * Admin login flow
+   *
+   * Redirects to admin login with a return path.
+   */
   function goAdminLogin() {
     const next = getNextPath();
     setChoiceOpen(false);
     nav(`/admin/login?next=${encodeURIComponent(next)}`);
   }
 
+  /**
+   * Demo login flow
+   *
+   * Converts public routes to sandbox routes:
+   *
+   * /projects              -> /demo
+   * /projects/my-project   -> /demo/projects/my-project
+   */
   function goDemoLogin() {
-    const next = getNextPath();
+    const path = getNextPath();
+    let next = "/demo";
+
+    if (path === "/projects") {
+      next = "/demo";
+    } else if (path.startsWith("/projects/")) {
+      next = `/demo${path}`;
+    } else if (path.startsWith("/demo")) {
+      next = path;
+    }
+
     setChoiceOpen(false);
     nav(`/demo/login?next=${encodeURIComponent(next)}`);
   }
@@ -69,25 +112,35 @@ export default function Navbar() {
   return (
     <header className="navWrap">
       <div className="navInner">
-        <Link className="brand" to="/projects">
+
+        {/* Brand always links to correct home */}
+        <Link className="brand" to={projectsPath}>
           {title}
         </Link>
 
         <nav className="navLinks">
+
+          {/* Projects link adapts for demo mode */}
           <NavLink
-            to="/projects"
+            to={projectsPath}
             className={({ isActive }) => (isActive ? "active" : "")}
           >
             Projects
           </NavLink>
 
-          <button type="button" className="navBtn" onClick={handleAuthClick}>
+          {/* Login / Logout button */}
+          <button
+            type="button"
+            className="navBtn"
+            onClick={handleAuthClick}
+          >
             {isAdmin || isDemo ? "Logout" : "Login"}
           </button>
+
         </nav>
       </div>
 
-      {/* Access choice modal (Admin vs Demo) */}
+      {/* Modal allowing user to choose Admin or Demo login */}
       <AccessChoiceModal
         open={choiceOpen}
         onClose={() => setChoiceOpen(false)}

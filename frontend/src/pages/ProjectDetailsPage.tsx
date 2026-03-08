@@ -4,9 +4,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import PageHeader from "../components/PageHeader/PageHeader";
 import AdminButton from "../components/AdminButton";
 import AccessChoiceModal from "../components/AccessChoiceModal";
-import { useAuth } from "../context/AuthContext"; 
+import { useAuth } from "../context/AuthContext";
 
-import { api, type ProjectDetailsDto, type TaskDto, type TaskStatus } from "../lib/api";
+import {
+  api,
+  type ProjectDetailsDto,
+  type TaskDto,
+  type TaskStatus,
+} from "../lib/api";
 
 import "../styles/projectDetails.css";
 
@@ -53,27 +58,26 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
  * ProjectDetailsPage (PUBLIC)
  *
  * Purpose:
- * - Anyone can view project details, tasks, updates
- * - "Edit" is shown, but behavior depends on auth state:
- *    - ADMIN -> go to admin edit page
- *    - DEMO  -> go to demo edit page
- *    - none  -> prompt: login as admin OR continue as demo
+ * - Anyone can view project details, tasks, and updates
+
+ *
+ * Notes:
+ * - This page remains read-only
  */
 export default function ProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { isAdmin, isDemo } = useAuth();
 
-  // Loaded project details (null until fetched)
+  // Loaded project details (project + tasks + updates)
   const [data, setData] = useState<ProjectDetailsDto | null>(null);
 
-  // UI state for fetch + error display
+  // UI state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  //Access choice modal
+
+  // Access choice modal
   const [choiceOpen, setChoiceOpen] = useState(false);
-
-
 
   /**
    * Fetch project details from the backend by slug (PUBLIC endpoint).
@@ -109,14 +113,21 @@ export default function ProjectDetailsPage() {
    */
   const updatesSorted = useMemo(() => {
     const u = [...(data?.updates ?? [])];
-    u.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    u.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     return u;
   }, [data]);
 
-   function onEditClick(){
-   if(!data) return
-   
-  // If already authenticated, route directly
+  /**
+   * Main project edit button in page header.
+   *
+   * Routes directly when already authenticated,
+   * otherwise opens the access choice modal.
+   */
+  function onEditProjectClick() {
+    if (!data) return;
+
     if (isAdmin) {
       navigate(`/admin/projects/${data.project.slug}`);
       return;
@@ -127,20 +138,41 @@ export default function ProjectDetailsPage() {
       return;
     }
 
-    // Otherwise, ask how to continue
-    setChoiceOpen(true);}
+    setChoiceOpen(true);
+  }
 
 
+
+  /**
+   * Access choice -> Admin login
+   *
+   * "next" brings user back to the protected editor page
+   * after login.
+   */
   function goAdminLogin() {
     if (!data) return;
-    // "next" will bring them back to the admin page after login
-    navigate(`/admin/login?next=${encodeURIComponent(`/admin/projects/${data.project.slug}`)}`);
+    navigate(
+      `/admin/login?next=${encodeURIComponent(
+        `/admin/projects/${data.project.slug}`
+      )}`
+    );
   }
 
+  /**
+   * Access choice -> Demo login
+   *
+   * "next" brings user back to the demo editor page
+   * after login.
+   */
   function goDemoLogin() {
     if (!data) return;
-    navigate(`/demo/login?next=${encodeURIComponent(`/demo/projects/${data.project.slug}`)}`);
+    navigate(
+      `/demo/login?next=${encodeURIComponent(
+        `/demo/projects/${data.project.slug}`
+      )}`
+    );
   }
+
   return (
     <main className="container">
       <Link className="backLink" to="/projects">
@@ -158,25 +190,36 @@ export default function ProjectDetailsPage() {
             right={
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 {data.project.repoUrl && (
-                  <a href={data.project.repoUrl} target="_blank" rel="noreferrer">
+                  <a
+                    href={data.project.repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Repo
                   </a>
                 )}
+
                 {data.project.liveUrl && (
-                  <a href={data.project.liveUrl} target="_blank" rel="noreferrer">
+                  <a
+                    href={data.project.liveUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Live
                   </a>
                 )}
 
                 {/* Edit button is always visible, but behavior is gated */}
-                <AdminButton onClick={onEditClick}>Edit</AdminButton>
+                <AdminButton onClick={onEditProjectClick}>Edit</AdminButton>
               </div>
             }
           />
 
           <div className="spacer" />
 
-          {/* Task board (READ-ONLY) */}
+          {/* =========================
+              Task board (READ-ONLY)
+             ========================= */}
           <section>
             <h2 className="h2">Roadmap Tasks</h2>
 
@@ -195,16 +238,22 @@ export default function ProjectDetailsPage() {
                       <div key={t.id} className="card-soft taskCard">
                         <p className="taskTitle">{t.title}</p>
 
-                        {t.description ? <div className="taskDesc">{t.description}</div> : null}
+                        {t.description ? (
+                          <div className="taskDesc">{t.description}</div>
+                        ) : null}
 
                         <div className="taskMeta">
                           <span className="pill">{t.type}</span>
                           <span className="pill">{t.priority}</span>
-                          {t.targetVersion ? <span className="pill">{t.targetVersion}</span> : null}
+                          {t.targetVersion ? (
+                            <span className="pill">{t.targetVersion}</span>
+                          ) : null}
                           <span className="pill">{t.status}</span>
                         </div>
 
-                        <div className="taskFooter">Updated {fmt(t.updatedAt)}</div>
+                        <div className="taskFooter">
+                          Updated {fmt(t.updatedAt)}
+                        </div>
                       </div>
                     ))}
 
@@ -221,7 +270,9 @@ export default function ProjectDetailsPage() {
 
           <div className="spacer" />
 
-          {/* Updates timeline (READ-ONLY) */}
+          {/* =========================
+              Updates timeline (READ-ONLY)
+             ========================= */}
           <section>
             <h2 className="h2">Updates</h2>
 
@@ -234,19 +285,27 @@ export default function ProjectDetailsPage() {
                   </div>
 
                   <div className="updateBody">{u.body}</div>
+        
                 </div>
               ))}
 
-              {updatesSorted.length === 0 ? <p className="muted">No updates yet.</p> : null}
+              {updatesSorted.length === 0 ? (
+                <p className="muted">No updates yet.</p>
+              ) : null}
             </div>
           </section>
-          
+
+          {/* =========================
+              Access choice modal
+             ========================= */}
           <AccessChoiceModal
             open={choiceOpen}
             onClose={() => setChoiceOpen(false)}
             onAdmin={goAdminLogin}
             onDemo={goDemoLogin}
-            />
+            title="Edit this project?"
+            message="Choose how you want to continue."
+          />
         </>
       )}
     </main>

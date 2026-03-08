@@ -223,8 +223,20 @@ export const api = {
   deleteUpdate: (updateId: string) =>
     http<void>(`/admin/updates/${updateId}`, { method: "DELETE" }),
 
+  updateUpdate: (projectId: string, updateId: string, payload: CreateUpdateRequest) =>
+  http<UpdateDto>(`/admin/projects/${projectId}/updates/${updateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }),
+
   // ---- Demo (sandbox) ----
   demoReset: () => http<void>("/demo/reset", { method: "POST" }),
+
+  demoUpdateProject: (projectId: string, payload: UpdateProjectRequest) =>
+    http<ProjectDto>(`/demo/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   demoListProjects: () => http<ProjectDto[]>("/demo/projects"),
 
@@ -249,6 +261,12 @@ demoDeleteUpdate: (projectId: string, updateId: string) =>
   demoCreateUpdate: (projectId: string, payload: CreateUpdateRequest) =>
     http<UpdateDto>(`/demo/projects/${projectId}/updates`, { method: "POST", body: JSON.stringify(payload) }),
 
+  demoUpdateUpdate: (projectId: string, updateId: string, payload: CreateUpdateRequest) =>
+  http<UpdateDto>(`/demo/projects/${projectId}/updates/${updateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  }),
+  
   demoCreateProject: (payload: CreateProjectRequest) =>
     http<ProjectDto>("/demo/projects", {
       method: "POST",

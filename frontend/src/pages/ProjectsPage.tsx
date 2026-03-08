@@ -1,31 +1,43 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api, type CreateProjectRequest, type ProjectDto } from "../lib/api";
 import PageHeader from "../components/PageHeader/PageHeader";
 import { useAuth } from "../context/AuthContext";
+import AccessChoiceModal from "../components/AccessChoiceModal";
 
 import "../styles/projects.css";
 
 /**
- * ProjectsPage (PUBLIC)
+ * ProjectsPage
  *
+ * Public behavior:
  * - Anyone can view projects
- * - Admins can create projects (via modal)
- * - Non-admins clicking "Create Project" are redirected to login
+ * - Edit button is visible on every card
+ * - Create Project asks how to continue if user is not authenticated
+ * - Edit asks how to continue if user is not authenticated
+ *
+ * Auth behavior:
+ * - ADMIN -> create/edit real portfolio data
+ * - DEMO  -> create/edit sandbox demo data
+ *
+ * Important:
+ * - Create button now uses the old "Admin or Demo" choice flow again
+ * - After login from the Edit button, this page opens the edit modal directly
  */
 export default function ProjectsPage() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { isAdmin, isDemo } = useAuth();
 
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal state
+  // Create/Edit modal state
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Create form state
+  // Form state shared by Create + Edit
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [summary, setSummary] = useState("");
@@ -37,12 +49,32 @@ export default function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // When not null -> modal is in EDIT mode
+  const [editingProject, setEditingProject] = useState<ProjectDto | null>(null);
+
+  // Access choice modal (Admin vs Demo)
+  const [choiceOpen, setChoiceOpen] = useState(false);
+
+  /**
+   * Stores what the user wanted to do before login:
+   * - create
+   * - edit a specific project
+   */
+  const [pendingAction, setPendingAction] = useState<"create" | "edit" | null>(null);
+  const [editTarget, setEditTarget] = useState<ProjectDto | null>(null);
+
+  /**
+   * Load projects.
+   *
+   * - If DEMO is active, show sandbox projects
+   * - Otherwise show public/real projects
+   */
   async function loadProjects() {
     setLoading(true);
     setError(null);
 
     try {
-      const list = await api.listProjects();
+      const list = isDemo ? await api.demoListProjects() : await api.listProjects();
       setProjects(list);
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -51,25 +83,149 @@ export default function ProjectsPage() {
     }
   }
 
+  /**
+   * Reload whenever auth mode changes.
+   * This allows:
+   * - public -> real projects
+   * - demo   -> sandbox projects
+   */
   useEffect(() => {
     loadProjects();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDemo]);
 
-  function openCreateModal() {
-    // If not admin, send them to login (button is clickable, not disabled)
-    if (!isAdmin) {
-      navigate("/admin/login");
+  /**
+   * Open Create modal directly.
+   * Used when user is already ADMIN/DEMO, or after login redirect comes back here.
+   */
+  function openCreateModalDirect() {
+    setEditingProject(null);
+    setCreateError(null);
+    resetCreateForm();
+    setCreateOpen(true);
+  }
+
+  /**
+   * Open Edit modal directly and prefill existing data.
+   */
+  function openEditModalDirect(p: ProjectDto) {
+    setEditingProject(p);
+
+    setSlug(p.slug ?? "");
+    setName(p.name ?? "");
+    setSummary(p.summary ?? "");
+    setDescription(p.description ?? "");
+    setTechStack(p.techStack ?? "");
+    setRepoUrl(p.repoUrl ?? "");
+    setLiveUrl(p.liveUrl ?? "");
+
+    setCreateError(null);
+    setCreateOpen(true);
+  }
+
+  /**
+   * After returning from login with a ?action=... query,
+   * automatically open the correct modal.
+   *
+   * Examples:
+   * - /projects?action=create
+   * - /projects?action=edit&slug=workout-app
+   */
+  useEffect(() => {
+    if (loading) return;
+    if (!isAdmin && !isDemo) return;
+
+    const action = searchParams.get("action");
+    const slugFromQuery = searchParams.get("slug");
+
+    if (action === "create") {
+      openCreateModalDirect();
+      setSearchParams({}, { replace: true });
       return;
     }
 
-    // Admin: open modal
-    setCreateError(null);
-    setCreateOpen(true);
+    if (action === "edit" && slugFromQuery) {
+      const target = projects.find((p) => p.slug === slugFromQuery);
+      if (target) {
+        openEditModalDirect(target);
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [loading, isAdmin, isDemo, projects, searchParams, setSearchParams]);
+
+  /**
+   * Public Create click:
+   * - ADMIN/DEMO -> open modal directly
+   * - none       -> ask Admin or Demo
+   */
+  function onCreateClick() {
+    if (isAdmin || isDemo) {
+      openCreateModalDirect();
+      return;
+    }
+
+    setPendingAction("create");
+    setEditTarget(null);
+    setChoiceOpen(true);
+  }
+
+  /**
+   * Public Edit click:
+   * - ADMIN/DEMO -> open edit modal directly
+   * - none       -> ask Admin or Demo
+   */
+  function onEditClick(p: ProjectDto) {
+    if (isAdmin || isDemo) {
+      openEditModalDirect(p);
+      return;
+    }
+
+    setPendingAction("edit");
+    setEditTarget(p);
+    setChoiceOpen(true);
+  }
+
+  /**
+   * AccessChoiceModal -> Admin path
+   *
+   * Returns to this same page with intent encoded in query params,
+   * so after login the correct modal opens automatically.
+   */
+  function goAdminLogin() {
+    let next = "/projects";
+
+    if (pendingAction === "create") {
+      next = "/projects?action=create";
+    } else if (pendingAction === "edit" && editTarget) {
+      next = `/projects?action=edit&slug=${encodeURIComponent(editTarget.slug)}`;
+    }
+
+    setChoiceOpen(false);
+    navigate(`/admin/login?next=${encodeURIComponent(next)}`);
+  }
+
+  /**
+   * AccessChoiceModal -> Demo path
+   *
+   * Same as admin: returns to this page, then opens the correct modal automatically.
+   */
+  function goDemoLogin() {
+    let next = "/demo";
+
+    if (pendingAction === "create") {
+      next = "/demo?action=create";
+    } else if (pendingAction === "edit" && editTarget) {
+      next = `/demo?action=edit&slug=${encodeURIComponent(editTarget.slug)}`;
+    }
+
+    setChoiceOpen(false);
+    navigate(`/demo/login?next=${encodeURIComponent(next)}`);
   }
 
   function closeCreateModal() {
     setCreateOpen(false);
     setCreateError(null);
+    setEditingProject(null);
   }
 
   function resetCreateForm() {
@@ -82,10 +238,15 @@ export default function ProjectsPage() {
     setLiveUrl("");
   }
 
-  async function onCreateProject() {
+  /**
+   * Submit Create/Edit.
+   *
+   * - ADMIN -> real endpoints
+   * - DEMO  -> sandbox endpoints
+   */
+  async function onSubmitProject() {
     setCreateError(null);
 
-    // Basic validation (you can tighten this later)
     if (!slug.trim() || !name.trim()) {
       setCreateError("Slug and Name are required.");
       return;
@@ -104,10 +265,20 @@ export default function ProjectsPage() {
     try {
       setCreating(true);
 
-      // Admin-only endpoint (will also be enforced by backend)
-      await api.createProject(payload);
+      if (editingProject) {
+        if (isDemo) {
+          await api.demoUpdateProject(editingProject.id, payload);
+        } else {
+          await api.updateProject(editingProject.id, payload);
+        }
+      } else {
+        if (isDemo) {
+          await api.demoCreateProject(payload);
+        } else {
+          await api.createProject(payload);
+        }
+      }
 
-      // Close modal, reset form, refresh list
       closeCreateModal();
       resetCreateForm();
       await loadProjects();
@@ -126,7 +297,7 @@ export default function ProjectsPage() {
         right={
           <button
             type="button"
-            onClick={openCreateModal}
+            onClick={onCreateClick}
             style={{
               padding: "10px 12px",
               borderRadius: 12,
@@ -135,7 +306,7 @@ export default function ProjectsPage() {
               color: "var(--text)",
               cursor: "pointer",
             }}
-            title={!isAdmin ? "Login required to create projects" : "Create a new project"}
+            title="Create as Admin or Demo"
           >
             + Create Project
           </button>
@@ -155,6 +326,29 @@ export default function ProjectsPage() {
               </div>
 
               {p.summary ? <p className="projectSummary">{p.summary}</p> : null}
+              {p.description ? <p className="projectDescription">{p.description}</p> : null}
+
+              {/* Edit is always visible in public view */}
+              <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onEditClick(p);
+                  }}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                    background: "rgba(255,255,255,0.08)",
+                    color: "var(--text)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Edit
+                </button>
+              </div>
 
               <div className="projectFooter">
                 <span className="muted2">
@@ -168,8 +362,22 @@ export default function ProjectsPage() {
         {!loading && projects.length === 0 ? <p className="muted">No projects yet.</p> : null}
       </div>
 
+      {/* Access choice modal (Admin vs Demo) */}
+      <AccessChoiceModal
+        open={choiceOpen}
+        onClose={() => {
+          setChoiceOpen(false);
+          setPendingAction(null);
+          setEditTarget(null);
+        }}
+        onAdmin={goAdminLogin}
+        onDemo={goDemoLogin}
+        title={pendingAction === "create" ? "Create a project?" : "Edit this project?"}
+        message="Choose how you want to continue."
+      />
+
       {/* =========================
-          Create Project Modal
+          Create/Edit Project Modal
          ========================= */}
       {createOpen && (
         <div
@@ -179,32 +387,32 @@ export default function ProjectsPage() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(10, 10, 20, 0.85)", // darker overlay
-            backdropFilter: "blur(6px)",          // optional: smooth blur
+            background: "rgba(10, 10, 20, 0.85)",
+            backdropFilter: "blur(6px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: 16,
-            zIndex: 9999, // make sure it sits above everything
+            zIndex: 9999,
           }}
         >
-          {/* Modal card (stop click from closing) */}
           <div
             onClick={(e) => e.stopPropagation()}
             className="card"
             style={{
-            width: "min(720px, 100%)",
-            padding: 20,
-            borderRadius: 18,
-            background: "rgba(25, 25, 35, 0.95)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              width: "min(720px, 100%)",
+              padding: 20,
+              borderRadius: 18,
+              background: "rgba(25, 25, 35, 0.95)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <h2 className="h2" style={{ marginTop: 0 }}>
-                Create Project
+                {editingProject ? "Edit Project" : "Create Project"}
               </h2>
+
               <button
                 type="button"
                 onClick={closeCreateModal}
@@ -337,7 +545,7 @@ export default function ProjectsPage() {
 
                 <button
                   type="button"
-                  onClick={onCreateProject}
+                  onClick={onSubmitProject}
                   disabled={creating}
                   style={{
                     padding: "10px 12px",
@@ -349,7 +557,13 @@ export default function ProjectsPage() {
                     opacity: creating ? 0.7 : 1,
                   }}
                 >
-                  {creating ? "Creating..." : "Create Project"}
+                  {creating
+                    ? editingProject
+                      ? "Saving..."
+                      : "Creating..."
+                    : editingProject
+                    ? "Save Changes"
+                    : "Create Project"}
                 </button>
               </div>
             </div>

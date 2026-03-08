@@ -10,6 +10,7 @@ import {
   type TaskPriority,
   type TaskStatus,
   type TaskType,
+  type UpdateDto,
 } from "../lib/api";
 
 import "../styles/projectDetails.css";
@@ -28,10 +29,16 @@ function groupByStatus(tasks: TaskDto[]) {
   return map;
 }
 
+/**
+ * Formats an ISO timestamp into local date/time.
+ */
 function fmt(iso: string) {
   return new Date(iso).toLocaleString();
 }
 
+/**
+ * Friendly column label for task status.
+ */
 function ColumnLabel({ status }: { status: TaskStatus }) {
   return (
     <>
@@ -45,27 +52,51 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
 }
 
 /**
- * DemoProjectDetailsPage (PROTECTED by RequireDemoAuth)
+ * DemoProjectDetailsPage
  *
- * Same UI as admin details, but:
- * - All requests go to /demo/** (sandbox)
+ * Protected sandbox editor for demo users.
+ *
+ * Features:
+ * - View demo project details
+ * - Create / edit / delete demo tasks
+ * - Create / edit / delete demo updates
+ * - Delete demo project
+ *
+ * All writes go to /demo/** endpoints only.
  */
 export default function DemoProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const {isDemo} = useAuth();
+  const { isDemo } = useAuth();
 
   const [data, setData] = useState<ProjectDetailsDto | null>(null);
+
+  // Page state
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
- 
+
+  // Modal open state
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
+  // Field validation errors
   const [taskErrors, setTaskErrors] = useState<{ title?: string }>({});
-  const [updateErrors, setUpdateErrors] = useState<{ title?: string; body?: string }>({});
+  const [updateErrors, setUpdateErrors] = useState<{
+    title?: string;
+    body?: string;
+  }>({});
 
-  // Create Task form
+  // Editing state
+  const [editingTask, setEditingTask] = useState<TaskDto | null>(null);
+  const [editingUpdate, setEditingUpdate] = useState<UpdateDto | null>(null);
+
+  // Server errors shown inside modals
+  const [taskServerError, setTaskServerError] = useState<string | null>(null);
+  const [updateServerError, setUpdateServerError] = useState<string | null>(
+    null
+  );
+
+  // Task form state
   const [tTitle, setTTitle] = useState("");
   const [tDesc, setTDesc] = useState("");
   const [tStatus, setTStatus] = useState<TaskStatus>("BACKLOG");
@@ -74,21 +105,50 @@ export default function DemoProjectDetailsPage() {
   const [tTarget, setTTarget] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
 
-  // Create Update form
+  // Update form state
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
 
+  /**
+   * Reset task modal state for fresh create/edit sessions.
+   */
+  function resetTaskModalState() {
+    setTaskErrors({});
+    setTaskServerError(null);
+    setEditingTask(null);
+    setTTitle("");
+    setTDesc("");
+    setTStatus("BACKLOG");
+    setTType("FEATURE");
+    setTPriority("MEDIUM");
+    setTTarget("");
+  }
+
+  /**
+   * Reset update modal state for fresh create/edit sessions.
+   */
+  function resetUpdateModalState() {
+    setUpdateErrors({});
+    setUpdateServerError(null);
+    setEditingUpdate(null);
+    setUTitle("");
+    setUBody("");
+  }
+
   function closeTaskModal() {
     setTaskModalOpen(false);
-    setTaskErrors({});
+    resetTaskModalState();
   }
 
   function closeUpdateModal() {
     setUpdateModalOpen(false);
-    setUpdateErrors({});
+    resetUpdateModalState();
   }
 
+  /**
+   * Load demo project details by slug.
+   */
   async function load() {
     if (!slug) return;
 
@@ -110,27 +170,107 @@ export default function DemoProjectDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  /**
+   * If user somehow lands here without demo auth, return to demo login.
+   */
+  useEffect(() => {
+    if (!isDemo && data) {
+      navigate(
+        `/demo/login?next=${encodeURIComponent(
+          `/demo/projects/${data.project.slug}`
+        )}`
+      );
+    }
+  }, [isDemo, data, navigate]);
+
+  /**
+   * ESC closes whichever modal is currently open.
+   */
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (taskModalOpen) closeTaskModal();
+      if (updateModalOpen) closeUpdateModal();
+    }
+
+    if (taskModalOpen || updateModalOpen) {
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    }
+  }, [taskModalOpen, updateModalOpen]);
+
   const grouped = useMemo(() => groupByStatus(data?.tasks ?? []), [data]);
 
   const updatesSorted = useMemo(() => {
     const u = [...(data?.updates ?? [])];
-    u.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    u.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     return u;
   }, [data]);
 
-  // Guard: if someone hits /demo/... without demo login, send them to demo login
-  useEffect(() => {
-    if (!isDemo && data) {
-      navigate(`/demo/login?next=${encodeURIComponent(`/demo/projects/${data.project.slug}`)}`);
-    }
-  }, [isDemo, data, navigate]);
+  /**
+   * Open task modal in CREATE mode.
+   */
+  function openCreateTaskModal() {
+    resetTaskModalState();
+    setPageError(null);
+    setTaskModalOpen(true);
+  }
 
-  async function onCreateTask() {
+  /**
+   * Open task modal in EDIT mode and prefill fields.
+   */
+  function openEditTaskModal(task: TaskDto) {
+    setEditingTask(task);
+    setTaskServerError(null);
+    setTaskErrors({});
+
+    setTTitle(task.title ?? "");
+    setTDesc(task.description ?? "");
+    setTStatus(task.status);
+    setTType(task.type);
+    setTPriority(task.priority);
+    setTTarget(task.targetVersion ?? "");
+
+    setTaskModalOpen(true);
+  }
+
+  /**
+   * Open update modal in CREATE mode.
+   */
+  function openCreateUpdateModal() {
+    resetUpdateModalState();
+    setPageError(null);
+    setUpdateModalOpen(true);
+  }
+
+  /**
+   * Open update modal in EDIT mode and prefill fields.
+   */
+  function openEditUpdateModal(update: UpdateDto) {
+    setEditingUpdate(update);
+    setUpdateServerError(null);
+    setUpdateErrors({});
+
+    setUTitle(update.title ?? "");
+    setUBody(update.body ?? "");
+
+    setUpdateModalOpen(true);
+  }
+
+  /**
+   * Create or update a demo task.
+   */
+  async function onSubmitTask() {
     if (!data) return;
 
     const nextErrors: { title?: string } = {};
     if (!tTitle.trim()) nextErrors.title = "Task title is required.";
+
     setTaskErrors(nextErrors);
+    setTaskServerError(null);
+
     if (Object.keys(nextErrors).length > 0) return;
 
     const payload: CreateTaskRequest = {
@@ -144,33 +284,35 @@ export default function DemoProjectDetailsPage() {
 
     try {
       setCreatingTask(true);
-      setPageError(null);
 
-      await api.demoCreateTask(data.project.id, payload);
-
-      setTTitle("");
-      setTDesc("");
-      setTStatus("BACKLOG");
-      setTType("FEATURE");
-      setTPriority("MEDIUM");
-      setTTarget("");
+      if (editingTask) {
+        await api.demoUpdateTask(data.project.id, editingTask.id, payload);
+      } else {
+        await api.demoCreateTask(data.project.id, payload);
+      }
 
       closeTaskModal();
       await load();
     } catch (e: any) {
-      setPageError(String(e?.message ?? e));
+      setTaskServerError(String(e?.message ?? e));
     } finally {
       setCreatingTask(false);
     }
   }
 
-  async function onCreateUpdate() {
+  /**
+   * Create or update a demo update entry.
+   */
+  async function onSubmitUpdate() {
     if (!data) return;
 
     const nextErrors: { title?: string; body?: string } = {};
     if (!uTitle.trim()) nextErrors.title = "Update title is required.";
     if (!uBody.trim()) nextErrors.body = "Update body is required.";
+
     setUpdateErrors(nextErrors);
+    setUpdateServerError(null);
+
     if (Object.keys(nextErrors).length > 0) return;
 
     const payload: CreateUpdateRequest = {
@@ -180,26 +322,31 @@ export default function DemoProjectDetailsPage() {
 
     try {
       setCreatingUpdate(true);
-      setPageError(null);
 
-      await api.demoCreateUpdate(data.project.id, payload);
-
-      setUTitle("");
-      setUBody("");
+      if (editingUpdate) {
+        await api.demoUpdateUpdate(data.project.id, editingUpdate.id, payload);
+      } else {
+        await api.demoCreateUpdate(data.project.id, payload);
+      }
 
       closeUpdateModal();
       await load();
     } catch (e: any) {
-      setPageError(String(e?.message ?? e));
+      setUpdateServerError(String(e?.message ?? e));
     } finally {
       setCreatingUpdate(false);
     }
   }
 
-   async function onDeleteProject() {
+  /**
+   * Delete demo project.
+   */
+  async function onDeleteProject() {
     if (!data) return;
 
-    if (!confirm(`Delete project "${data.project.name}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete project "${data.project.name}"? This cannot be undone.`)) {
+      return;
+    }
 
     try {
       setPageError(null);
@@ -210,28 +357,35 @@ export default function DemoProjectDetailsPage() {
     }
   }
 
-  async function onDeleteTask(taskId: string) {
+  /**
+   * Delete demo task.
+   */
+  async function onDeleteTask(projectId: string, taskId: string) {
     if (!confirm("Delete this task?")) return;
+
     try {
       setPageError(null);
-      await api.demoDeleteTask(taskId);
+      await api.demoDeleteTask(projectId, taskId);
       await load();
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
     }
   }
 
-  async function onDeleteUpdate(updateId: string) {
+  /**
+   * Delete demo update.
+   */
+  async function onDeleteUpdate(projectID: string, updateId: string) {
     if (!confirm("Delete this update?")) return;
+
     try {
       setPageError(null);
-      await api.demoDeleteUpdate(updateId);
+      await api.demoDeleteUpdate(projectID, updateId);
       await load();
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
     }
   }
-
 
   return (
     <main className="container">
@@ -251,11 +405,7 @@ export default function DemoProjectDetailsPage() {
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setPageError(null);
-                    setTaskErrors({});
-                    setTaskModalOpen(true);
-                  }}
+                  onClick={openCreateTaskModal}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -270,11 +420,7 @@ export default function DemoProjectDetailsPage() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setPageError(null);
-                    setUpdateErrors({});
-                    setUpdateModalOpen(true);
-                  }}
+                  onClick={openCreateUpdateModal}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -325,15 +471,26 @@ export default function DemoProjectDetailsPage() {
                       <div key={t.id} className="card-soft taskCard">
                         <p className="taskTitle">{t.title}</p>
 
-                        {t.description ? <div className="taskDesc">{t.description}</div> : null}
+                        {t.description ? (
+                          <div className="taskDesc">{t.description}</div>
+                        ) : null}
 
                         <div className="taskMeta">
                           <span className="pill">{t.type}</span>
                           <span className="pill">{t.priority}</span>
-                          {t.targetVersion ? <span className="pill">{t.targetVersion}</span> : null}
+                          {t.targetVersion ? (
+                            <span className="pill">{t.targetVersion}</span>
+                          ) : null}
                         </div>
 
-                        <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+                        <div
+                          style={{
+                            marginTop: 10,
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "center",
+                          }}
+                        >
                           <span className="muted2" style={{ fontSize: 13 }}>
                             Status
                           </span>
@@ -341,8 +498,11 @@ export default function DemoProjectDetailsPage() {
                           <select
                             value={t.status}
                             onChange={async (e) => {
+                              if (!data) return;
                               const next = e.target.value as TaskStatus;
-                              await api.demoUpdateTask(data.project.id, t.id, { status: next });
+                              await api.demoUpdateTask(data.project.id, t.id, {
+                                status: next,
+                              });
                               await load();
                             }}
                             style={{ padding: 8, borderRadius: 10 }}
@@ -355,21 +515,37 @@ export default function DemoProjectDetailsPage() {
 
                         <div className="taskFooter">Updated {fmt(t.updatedAt)}</div>
 
-                        <button
-                          type="button"
-                          onClick={() => onDeleteTask(t.id)}
-                          style={{
-                            marginTop: 10,
-                            padding: "8px 10px",
-                            borderRadius: 10,
-                            border: "1px solid var(--border)",
-                            background: "rgba(255, 80, 80, 0.12)",
-                            color: "var(--text)",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete Task
-                        </button>
+                        <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                          <button
+                            type="button"
+                            onClick={() => openEditTaskModal(t)}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(255,255,255,0.08)",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Edit Task
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onDeleteTask(data.project.id, t.id)}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(255, 80, 80, 0.12)",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Delete Task
+                          </button>
+                        </div>
                       </div>
                     ))}
 
@@ -399,29 +575,49 @@ export default function DemoProjectDetailsPage() {
 
                   <div className="updateBody">{u.body}</div>
 
-                  <button
-                    type="button"
-                    onClick={() => onDeleteUpdate(u.id)}
-                    style={{
-                      marginTop: 10,
-                      padding: "8px 10px",
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "rgba(255, 80, 80, 0.12)",
-                      color: "var(--text)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Delete Update
-                  </button>
+                  <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditUpdateModal(u)}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--border)",
+                        background: "rgba(255,255,255,0.08)",
+                        color: "var(--text)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Edit Update
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onDeleteUpdate(data.project.id, u.id)}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--border)",
+                        background: "rgba(255, 80, 80, 0.12)",
+                        color: "var(--text)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete Update
+                    </button>
+                  </div>
                 </div>
               ))}
 
-              {updatesSorted.length === 0 ? <p className="muted">No updates yet.</p> : null}
+              {updatesSorted.length === 0 ? (
+                <p className="muted">No updates yet.</p>
+              ) : null}
             </div>
           </section>
 
-          {/* Create Task Modal */}
+          {/* =========================
+              Create/Edit Task Modal
+             ========================= */}
           {taskModalOpen && (
             <div
               role="dialog"
@@ -442,11 +638,15 @@ export default function DemoProjectDetailsPage() {
               <div
                 onClick={(e) => e.stopPropagation()}
                 className="card"
-                style={{ width: "min(720px, 100%)", padding: 16, borderRadius: 16 }}
+                style={{
+                  width: "min(720px, 100%)",
+                  padding: 16,
+                  borderRadius: 16,
+                }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
-                    Create Task
+                    {editingTask ? "Edit Task" : "Create Task"}
                   </h2>
 
                   <button
@@ -465,14 +665,19 @@ export default function DemoProjectDetailsPage() {
                   </button>
                 </div>
 
-                {pageError && <p style={{ color: "salmon", marginTop: 0 }}>{pageError}</p>}
+                {taskServerError && (
+                  <p style={{ color: "salmon", marginTop: 0 }}>{taskServerError}</p>
+                )}
 
                 <div style={{ display: "grid", gap: 10 }}>
                   <input
                     value={tTitle}
                     onChange={(e) => {
-                      setTTitle(e.target.value);
-                      if (taskErrors.title) setTaskErrors({});
+                      const v = e.target.value;
+                      setTTitle(v);
+                      if (taskErrors.title && v.trim()) {
+                        setTaskErrors((prev) => ({ ...prev, title: undefined }));
+                      }
                     }}
                     placeholder="Title"
                     style={{
@@ -567,7 +772,7 @@ export default function DemoProjectDetailsPage() {
 
                     <button
                       type="button"
-                      onClick={onCreateTask}
+                      onClick={onSubmitTask}
                       disabled={creatingTask}
                       style={{
                         padding: "10px 12px",
@@ -579,7 +784,13 @@ export default function DemoProjectDetailsPage() {
                         opacity: creatingTask ? 0.7 : 1,
                       }}
                     >
-                      {creatingTask ? "Creating..." : "Create Task"}
+                      {creatingTask
+                        ? editingTask
+                          ? "Saving..."
+                          : "Creating..."
+                        : editingTask
+                        ? "Save Task"
+                        : "Create Task"}
                     </button>
                   </div>
                 </div>
@@ -587,7 +798,9 @@ export default function DemoProjectDetailsPage() {
             </div>
           )}
 
-          {/* Create Update Modal */}
+          {/* =========================
+              Create/Edit Update Modal
+             ========================= */}
           {updateModalOpen && (
             <div
               role="dialog"
@@ -608,11 +821,15 @@ export default function DemoProjectDetailsPage() {
               <div
                 onClick={(e) => e.stopPropagation()}
                 className="card"
-                style={{ width: "min(720px, 100%)", padding: 16, borderRadius: 16 }}
+                style={{
+                  width: "min(720px, 100%)",
+                  padding: 16,
+                  borderRadius: 16,
+                }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
-                    Create Update
+                    {editingUpdate ? "Edit Update" : "Create Update"}
                   </h2>
 
                   <button
@@ -631,14 +848,19 @@ export default function DemoProjectDetailsPage() {
                   </button>
                 </div>
 
-                {pageError && <p style={{ color: "salmon", marginTop: 0 }}>{pageError}</p>}
+                {updateServerError && (
+                  <p style={{ color: "salmon", marginTop: 0 }}>{updateServerError}</p>
+                )}
 
                 <div style={{ display: "grid", gap: 10 }}>
                   <input
                     value={uTitle}
                     onChange={(e) => {
-                      setUTitle(e.target.value);
-                      if (updateErrors.title) setUpdateErrors((p) => ({ ...p, title: undefined }));
+                      const v = e.target.value;
+                      setUTitle(v);
+                      if (updateErrors.title && v.trim()) {
+                        setUpdateErrors((prev) => ({ ...prev, title: undefined }));
+                      }
                     }}
                     placeholder="Title"
                     style={{
@@ -659,8 +881,11 @@ export default function DemoProjectDetailsPage() {
                   <textarea
                     value={uBody}
                     onChange={(e) => {
-                      setUBody(e.target.value);
-                      if (updateErrors.body) setUpdateErrors((p) => ({ ...p, body: undefined }));
+                      const v = e.target.value;
+                      setUBody(v);
+                      if (updateErrors.body && v.trim()) {
+                        setUpdateErrors((prev) => ({ ...prev, body: undefined }));
+                      }
                     }}
                     placeholder="Body"
                     rows={6}
@@ -697,7 +922,7 @@ export default function DemoProjectDetailsPage() {
 
                     <button
                       type="button"
-                      onClick={onCreateUpdate}
+                      onClick={onSubmitUpdate}
                       disabled={creatingUpdate}
                       style={{
                         padding: "10px 12px",
@@ -709,7 +934,13 @@ export default function DemoProjectDetailsPage() {
                         opacity: creatingUpdate ? 0.7 : 1,
                       }}
                     >
-                      {creatingUpdate ? "Creating..." : "Create Update"}
+                      {creatingUpdate
+                        ? editingUpdate
+                          ? "Saving..."
+                          : "Creating..."
+                        : editingUpdate
+                        ? "Save Update"
+                        : "Create Update"}
                     </button>
                   </div>
                 </div>

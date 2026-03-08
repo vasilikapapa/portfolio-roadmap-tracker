@@ -11,6 +11,7 @@ import {
   type TaskPriority,
   type TaskStatus,
   type TaskType,
+  type UpdateDto,
 } from "../lib/api";
 
 import "../styles/projectDetails.css";
@@ -68,6 +69,10 @@ export default function AdminProjectDetailsPage() {
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
+  // Editing state
+  const [editingTask, setEditingTask] = useState<TaskDto | null>(null);
+  const [editingUpdate, setEditingUpdate] = useState<UpdateDto | null>(null);
+
   // Modal server errors (shown INSIDE modal)
   const [taskServerError, setTaskServerError] = useState<string | null>(null);
   const [updateServerError, setUpdateServerError] = useState<string | null>(null);
@@ -78,7 +83,7 @@ export default function AdminProjectDetailsPage() {
     {}
   );
 
-  // Create Task form state
+  // Create/Edit Task form state
   const [tTitle, setTTitle] = useState("");
   const [tDesc, setTDesc] = useState("");
   const [tStatus, setTStatus] = useState<TaskStatus>("BACKLOG");
@@ -87,7 +92,7 @@ export default function AdminProjectDetailsPage() {
   const [tTarget, setTTarget] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
 
-  // Create Update form state
+  // Create/Edit Update form state
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
@@ -95,11 +100,21 @@ export default function AdminProjectDetailsPage() {
   function resetTaskModalState() {
     setTaskErrors({});
     setTaskServerError(null);
+    setEditingTask(null);
+    setTTitle("");
+    setTDesc("");
+    setTStatus("BACKLOG");
+    setTType("FEATURE");
+    setTPriority("MEDIUM");
+    setTTarget("");
   }
 
   function resetUpdateModalState() {
     setUpdateErrors({});
     setUpdateServerError(null);
+    setEditingUpdate(null);
+    setUTitle("");
+    setUBody("");
   }
 
   function closeTaskModal() {
@@ -155,7 +170,58 @@ export default function AdminProjectDetailsPage() {
     return u;
   }, [data]);
 
-  async function onCreateTask() {
+  /**
+   * Open task modal in CREATE mode
+   */
+  function openCreateTaskModal() {
+    resetTaskModalState();
+    setTaskModalOpen(true);
+  }
+
+  /**
+   * Open task modal in EDIT mode
+   */
+  function openEditTaskModal(task: TaskDto) {
+    setEditingTask(task);
+    setTaskServerError(null);
+    setTaskErrors({});
+
+    setTTitle(task.title ?? "");
+    setTDesc(task.description ?? "");
+    setTStatus(task.status);
+    setTType(task.type);
+    setTPriority(task.priority);
+    setTTarget(task.targetVersion ?? "");
+
+    setTaskModalOpen(true);
+  }
+
+  /**
+   * Open update modal in CREATE mode
+   */
+  function openCreateUpdateModal() {
+    resetUpdateModalState();
+    setUpdateModalOpen(true);
+  }
+
+  /**
+   * Open update modal in EDIT mode
+   */
+  function openEditUpdateModal(update: UpdateDto) {
+    setEditingUpdate(update);
+    setUpdateServerError(null);
+    setUpdateErrors({});
+
+    setUTitle(update.title ?? "");
+    setUBody(update.body ?? "");
+
+    setUpdateModalOpen(true);
+  }
+
+  /**
+   * Create or update a task
+   */
+  async function onSubmitTask() {
     if (!data) return;
 
     const nextErrors: { title?: string } = {};
@@ -177,15 +243,12 @@ export default function AdminProjectDetailsPage() {
 
     try {
       setCreatingTask(true);
-      await api.createTask(data.project.id, payload);
 
-      // reset fields
-      setTTitle("");
-      setTDesc("");
-      setTStatus("BACKLOG");
-      setTType("FEATURE");
-      setTPriority("MEDIUM");
-      setTTarget("");
+      if (editingTask) {
+        await api.updateTask(data.project.id, editingTask.id, payload);
+      } else {
+        await api.createTask(data.project.id, payload);
+      }
 
       closeTaskModal();
       await load();
@@ -196,7 +259,10 @@ export default function AdminProjectDetailsPage() {
     }
   }
 
-  async function onCreateUpdate() {
+  /**
+   * Create or update an update entry
+   */
+  async function onSubmitUpdate() {
     if (!data) return;
 
     const nextErrors: { title?: string; body?: string } = {};
@@ -215,11 +281,12 @@ export default function AdminProjectDetailsPage() {
 
     try {
       setCreatingUpdate(true);
-      await api.createUpdate(data.project.id, payload);
 
-      // reset fields
-      setUTitle("");
-      setUBody("");
+      if (editingUpdate) {
+        await api.updateUpdate(data.project.id,editingUpdate.id, payload);
+      } else {
+        await api.createUpdate(data.project.id, payload);
+      }
 
       closeUpdateModal();
       await load();
@@ -237,12 +304,7 @@ export default function AdminProjectDetailsPage() {
     try {
       setPageError(null);
 
-      // Prefer project-scoped delete if your API has it:
-      // await api.deleteTaskFromProject(data.project.id, taskId);
-
-      // If you only have deleteTask(taskId), keep this:
       await api.deleteTask(taskId);
-
       await load();
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
@@ -293,10 +355,7 @@ export default function AdminProjectDetailsPage() {
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    resetTaskModalState();
-                    setTaskModalOpen(true);
-                  }}
+                  onClick={openCreateTaskModal}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -311,10 +370,7 @@ export default function AdminProjectDetailsPage() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    resetUpdateModalState();
-                    setUpdateModalOpen(true);
-                  }}
+                  onClick={openCreateUpdateModal}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -402,21 +458,37 @@ export default function AdminProjectDetailsPage() {
 
                         <div className="taskFooter">Updated {fmt(t.updatedAt)}</div>
 
-                        <button
-                          type="button"
-                          onClick={() => onDeleteTask(t.id)}
-                          style={{
-                            marginTop: 10,
-                            padding: "8px 10px",
-                            borderRadius: 10,
-                            border: "1px solid var(--border)",
-                            background: "rgba(255, 80, 80, 0.12)",
-                            color: "var(--text)",
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete Task
-                        </button>
+                        <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                          <button
+                            type="button"
+                            onClick={() => openEditTaskModal(t)}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(255,255,255,0.08)",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Edit Task
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onDeleteTask(t.id)}
+                            style={{
+                              padding: "8px 10px",
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(255, 80, 80, 0.12)",
+                              color: "var(--text)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Delete Task
+                          </button>
+                        </div>
                       </div>
                     ))}
 
@@ -446,21 +518,37 @@ export default function AdminProjectDetailsPage() {
 
                   <div className="updateBody">{u.body}</div>
 
-                  <button
-                    type="button"
-                    onClick={() => onDeleteUpdate(u.id)}
-                    style={{
-                      marginTop: 10,
-                      padding: "8px 10px",
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "rgba(255, 80, 80, 0.12)",
-                      color: "var(--text)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Delete Update
-                  </button>
+                  <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditUpdateModal(u)}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--border)",
+                        background: "rgba(255,255,255,0.08)",
+                        color: "var(--text)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Edit Update
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onDeleteUpdate(u.id)}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--border)",
+                        background: "rgba(255, 80, 80, 0.12)",
+                        color: "var(--text)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete Update
+                    </button>
+                  </div>
                 </div>
               ))}
 
@@ -469,7 +557,7 @@ export default function AdminProjectDetailsPage() {
           </section>
 
           {/* =========================
-              Create Task Modal
+              Create/Edit Task Modal
              ========================= */}
           {taskModalOpen && (
             <div
@@ -499,7 +587,7 @@ export default function AdminProjectDetailsPage() {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
-                    Create Task
+                    {editingTask ? "Edit Task" : "Create Task"}
                   </h2>
 
                   <button
@@ -625,7 +713,7 @@ export default function AdminProjectDetailsPage() {
 
                     <button
                       type="button"
-                      onClick={onCreateTask}
+                      onClick={onSubmitTask}
                       disabled={creatingTask}
                       style={{
                         padding: "10px 12px",
@@ -637,7 +725,13 @@ export default function AdminProjectDetailsPage() {
                         opacity: creatingTask ? 0.7 : 1,
                       }}
                     >
-                      {creatingTask ? "Creating..." : "Create Task"}
+                      {creatingTask
+                        ? editingTask
+                          ? "Saving..."
+                          : "Creating..."
+                        : editingTask
+                        ? "Save Task"
+                        : "Create Task"}
                     </button>
                   </div>
                 </div>
@@ -646,7 +740,7 @@ export default function AdminProjectDetailsPage() {
           )}
 
           {/* =========================
-              Create Update Modal
+              Create/Edit Update Modal
              ========================= */}
           {updateModalOpen && (
             <div
@@ -676,7 +770,7 @@ export default function AdminProjectDetailsPage() {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
-                    Create Update
+                    {editingUpdate ? "Edit Update" : "Create Update"}
                   </h2>
 
                   <button
@@ -769,7 +863,7 @@ export default function AdminProjectDetailsPage() {
 
                     <button
                       type="button"
-                      onClick={onCreateUpdate}
+                      onClick={onSubmitUpdate}
                       disabled={creatingUpdate}
                       style={{
                         padding: "10px 12px",
@@ -781,7 +875,13 @@ export default function AdminProjectDetailsPage() {
                         opacity: creatingUpdate ? 0.7 : 1,
                       }}
                     >
-                      {creatingUpdate ? "Creating..." : "Create Update"}
+                      {creatingUpdate
+                        ? editingUpdate
+                          ? "Saving..."
+                          : "Creating..."
+                        : editingUpdate
+                        ? "Save Update"
+                        : "Create Update"}
                     </button>
                   </div>
                 </div>
