@@ -13,8 +13,10 @@ import com.vasilika.portfoliotracker.web.dto.*;
 import com.vasilika.portfoliotracker.web.mapper.TaskMapper;
 import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URI;
 import java.time.Instant;
@@ -260,6 +262,41 @@ public class AdminProjectItemsController {
         Task saved = tasks.save(t);
 
         return ResponseEntity.ok(TaskMapper.toDto(saved));
+    }
+
+
+    /**
+     *
+     * PATCH /admin/projects/{projectId}/updates/{updateId}
+     *
+     *
+     * Partially updates an existing demo update.
+     *
+     * Supports:
+     * - title
+     * - body
+     */
+    @PatchMapping("/{projectId}/updates/{updateId}")
+    public ResponseEntity<UpdateDto> updateUpdate(
+            @PathVariable UUID projectId,
+            @PathVariable UUID updateId,
+            @Valid @RequestBody UpdateUpdateRequest req
+    ) {
+        Update u = updates.findById(updateId)
+                .orElseThrow(() -> new IllegalArgumentException("Update not found: " + updateId));
+
+        // Ensure update belongs to the given project
+        if (!u.getProject().getId().equals(projectId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Partial field updates
+        if (req.title() != null) u.setTitle(req.title());
+        if (req.body() != null) u.setBody(req.body());
+        if (req.createdAt() !=null) u.setCreatedAt(Instant.now());
+
+        Update saved = updates.save(u);
+        return ResponseEntity.ok(UpdateMapper.toDto(saved));
     }
 
 
