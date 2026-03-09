@@ -21,9 +21,9 @@ import "../styles/projects.css";
  * - ADMIN -> create/edit real portfolio data
  * - DEMO  -> create/edit sandbox demo data
  *
- * Important:
- * - Create button now uses the old "Admin or Demo" choice flow again
- * - After login from the Edit button, this page opens the edit modal directly
+ * UX note:
+ * - First load may be slower if backend is waking up from Render cold start
+ * - Loading cards help the page feel responsive while data is loading
  */
 export default function ProjectsPage() {
   const navigate = useNavigate();
@@ -68,8 +68,39 @@ export default function ProjectsPage() {
    *
    * - If DEMO is active, show sandbox projects
    * - Otherwise show public/real projects
+   *
+   * mounted guard prevents state updates after unmount.
    */
-  async function loadProjects() {
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadProjects() {
+      if (mounted) {
+        setLoading(true);
+        setError(null);
+      }
+
+      try {
+        const list = isDemo ? await api.demoListProjects() : await api.listProjects();
+        if (mounted) setProjects(list);
+      } catch (e: any) {
+        if (mounted) setError(String(e?.message ?? e));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadProjects();
+
+    return () => {
+      mounted = false;
+    };
+  }, [isDemo]);
+
+  /**
+   * Reload list after create/update.
+   */
+  async function refreshProjects() {
     setLoading(true);
     setError(null);
 
@@ -82,17 +113,6 @@ export default function ProjectsPage() {
       setLoading(false);
     }
   }
-
-  /**
-   * Reload whenever auth mode changes.
-   * This allows:
-   * - public -> real projects
-   * - demo   -> sandbox projects
-   */
-  useEffect(() => {
-    loadProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDemo]);
 
   /**
    * Open Create modal directly.
@@ -281,7 +301,7 @@ export default function ProjectsPage() {
 
       closeCreateModal();
       resetCreateForm();
-      await loadProjects();
+      await refreshProjects();
     } catch (e: any) {
       setCreateError(String(e?.message ?? e));
     } finally {
@@ -314,50 +334,106 @@ export default function ProjectsPage() {
       />
 
       <div className="container">
-        {loading && <p className="muted">Loading…</p>}
-        {error && <p style={{ color: "salmon" }}>{error}</p>}
+        {loading && (
+          <>
+            <p className="muted">Loading projects... First visit may take a moment.</p>
 
-        <div className="projectGrid">
-          {projects.map((p) => (
-            <Link key={p.id} to={`/projects/${p.slug}`} className="projectCard">
-              <div className="projectTop">
-                <h3>{p.name}</h3>
-                {p.techStack ? <span className="pill">{p.techStack}</span> : null}
-              </div>
-
-              {p.summary ? <p className="projectSummary">{p.summary}</p> : null}
-              {p.description ? <p className="projectDescription">{p.description}</p> : null}
-
-              {/* Edit is always visible in public view */}
-              <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onEditClick(p);
-                  }}
+            <div className="projectGrid">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="projectCard"
                   style={{
-                    padding: "8px 10px",
-                    borderRadius: 10,
-                    border: "1px solid var(--border)",
-                    background: "rgba(255,255,255,0.08)",
-                    color: "var(--text)",
-                    cursor: "pointer",
+                    opacity: 0.65,
+                    pointerEvents: "none",
                   }}
                 >
-                  Edit
-                </button>
-              </div>
+                  <div
+                    style={{
+                      height: 20,
+                      width: "60%",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.14)",
+                      marginBottom: 12,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 12,
+                      width: "100%",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.10)",
+                      marginBottom: 8,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 12,
+                      width: "72%",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.08)",
+                      marginBottom: 16,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 34,
+                      width: 70,
+                      borderRadius: 10,
+                      background: "rgba(255,255,255,0.08)",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
-              <div className="projectFooter">
-                <span className="muted2">
-                  Created {new Date(p.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {error && <p style={{ color: "salmon" }}>{error}</p>}
+
+        {!loading && (
+          <div className="projectGrid">
+            {projects.map((p) => (
+              <Link key={p.id} to={`/projects/${p.slug}`} className="projectCard">
+                <div className="projectTop">
+                  <h3>{p.name}</h3>
+                  {p.techStack ? <span className="pill">{p.techStack}</span> : null}
+                </div>
+
+                {p.summary ? <p className="projectSummary">{p.summary}</p> : null}
+                {p.description ? <p className="projectDescription">{p.description}</p> : null}
+
+                {/* Edit is always visible in public view */}
+                <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onEditClick(p);
+                    }}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: 10,
+                      border: "1px solid var(--border)",
+                      background: "rgba(255,255,255,0.08)",
+                      color: "var(--text)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                <div className="projectFooter">
+                  <span className="muted2">
+                    Created {new Date(p.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
 
         {!loading && projects.length === 0 ? <p className="muted">No projects yet.</p> : null}
       </div>
