@@ -136,7 +136,6 @@ export default function AdminLoginPage() {
           <input
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
-            autoComplete="username"
             style={{
               padding: 10,
               borderRadius: 10,
@@ -150,7 +149,6 @@ export default function AdminLoginPage() {
             type="password"
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
-            autoComplete="current-password"
             style={{
               padding: 10,
               borderRadius: 10,
