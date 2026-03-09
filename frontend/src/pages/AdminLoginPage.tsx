@@ -134,7 +134,6 @@ export default function AdminLoginPage() {
       ) : (
         <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
           <input
-            value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="Username"
             autoComplete="username"
@@ -149,7 +148,6 @@ export default function AdminLoginPage() {
 
           <input
             type="password"
-            value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
             autoComplete="current-password"
