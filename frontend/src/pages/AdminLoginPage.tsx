@@ -178,7 +178,7 @@ export default function AdminLoginPage() {
       color: "var(--text)",
     }}
   />
-</form>
+
 
           {/* Error message banner */}
           {error && (
