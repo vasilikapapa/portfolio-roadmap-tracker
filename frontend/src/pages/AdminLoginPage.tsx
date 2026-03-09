@@ -132,33 +132,53 @@ export default function AdminLoginPage() {
           </div>
         </div>
       ) : (
-        <form onSubmit={onSubmit} style={{ display: "grid", gap: 10 }}>
-          <input
-            autoComplete="off"
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Username"
-            style={{
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "rgba(0,0,0,0.12)",
-              color: "var(--text)",
-            }}
-          />
+        <form onSubmit={onSubmit} autoComplete="off" style={{ display: "grid", gap: 10 }}>
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              style={{ display: "none" }}
+              tabIndex={-1}
+            />
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              style={{ display: "none" }}
+              tabIndex={-1}
+            />
 
-          <input
-          autoComplete="off"
-            type="password"
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            style={{
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "rgba(0,0,0,0.12)",
-              color: "var(--text)",
-            }}
-          />
+            <input
+              value={username}
+              name="admin-user"
+              autoComplete="off"
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              style={{
+                padding: 10,
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "rgba(0,0,0,0.12)",
+                color: "var(--text)",
+              }}
+            />
+
+  <input
+    value={password}
+    type="password"
+    name="admin-pass"
+    autoComplete="new-password"
+    onChange={(e) => setPassword(e.target.value)}
+    placeholder="Password"
+    style={{
+      padding: 10,
+      borderRadius: 10,
+      border: "1px solid var(--border)",
+      background: "rgba(0,0,0,0.12)",
+      color: "var(--text)",
+    }}
+  />
+</form>
 
           {/* Error message banner */}
           {error && (
