@@ -47,7 +47,8 @@ public class CorsConfig {
                         .allowedOrigins(
                                 "http://localhost:5173",
                                 "http://localhost:3000",
-                                "https://portfolio-roadmap-tracker.vercel.app/projects"
+                                "https://portfolio-roadmap-tracker.vercel.app/projects",
+                                "https://portfolio-psi-cyan-67.vercel.app",
                         )
 
                         /**
