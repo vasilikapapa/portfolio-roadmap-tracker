@@ -7,49 +7,55 @@
  * - Panel transparency
  * - Text shades
  * - Shadows & border radius
- * Makes theme adjustments easy and consistent.
+ * Keeps the UI consistent and easy to adjust.
  */
 :root {
-  --bg: #0b1220;                      /* Main dark background */
-  --panel: rgba(255, 255, 255, 0.06); /* Glass panel background */
-  --panel2: rgba(255, 255, 255, 0.09);/* Slightly stronger panel */
-
-  --border: rgba(255, 255, 255, 0.12); /* Subtle border color */
-
-  --text: rgba(255, 255, 255, 0.92);   /* Primary text */
-  --muted: rgba(255, 255, 255, 0.70);  /* Secondary text */
-  --muted2: rgba(255, 255, 255, 0.55); /* Tertiary text */
-
+  --bg: #0b1220;                        /* Main dark background */
+  --panel: rgba(255, 255, 255, 0.06);   /* Standard glass panel */
+  --panel2: rgba(255, 255, 255, 0.09);  /* Slightly stronger panel */
+  --border: rgba(255, 255, 255, 0.12);  /* Soft border */
+  --text: rgba(255, 255, 255, 0.92);    /* Primary text */
+  --muted: rgba(255, 255, 255, 0.7);    /* Secondary text */
+  --muted2: rgba(255, 255, 255, 0.55);  /* Tertiary text */
   --shadow: 0 10px 35px rgba(0, 0, 0, 0.25); /* Card shadow */
-  --radius: 16px;                              /* Default rounding */
+  --radius: 16px;                       /* Default corner radius */
 }
 
-/* Ensure padding/border do not affect element width */
-* {
+/**
+ * ==========================================
+ * Global Reset / Sizing
+ * ==========================================
+ * Ensures padding and borders stay inside width.
+ * min-width: 0 helps flex/grid children shrink properly.
+ */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-/**
- * Root layout sizing
- * Ensures full-height app layout for flex positioning
- */
-html, body, #root {
-  height: 100%;
+* {
+  min-width: 0;
 }
 
+/**
+ * ==========================================
+ * Root Layout
+ * ==========================================
+ * Full-height structure for sticky footer layout.
+ */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html,
 body {
-  min-height: 100vh;
-}
-
-/**
- * Global page styling
- * - Dark gradient background
- * - Subtle color highlights for depth
- * - System font stack for performance
- */
-html, body {
   margin: 0;
   padding: 0;
+
+  /* Single unified page background */
   background:
     radial-gradient(1200px 600px at 10% 0%, rgba(120, 140, 255, 0.18), transparent 60%),
     radial-gradient(1000px 600px at 90% 10%, rgba(0, 200, 180, 0.14), transparent 55%),
@@ -61,7 +67,7 @@ html, body {
     ui-sans-serif,
     system-ui,
     -apple-system,
-    Segoe UI,
+    "Segoe UI",
     Roboto,
     Helvetica,
     Arial,
@@ -69,9 +75,29 @@ html, body {
     "Segoe UI Emoji";
 }
 
+body {
+  min-height: 100vh;
+}
+
 /**
- * Anchor styling
- * Slight opacity for subtle links with hover clarity.
+ * ==========================================
+ * Media Defaults
+ * ==========================================
+ * Prevents images and media from overflowing.
+ */
+img,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/**
+ * ==========================================
+ * Link Styling
+ * ==========================================
  */
 a {
   color: var(--text);
@@ -85,65 +111,105 @@ a:hover {
 }
 
 /**
- * Main content container
- * Centers content and limits width for readability.
+ * ==========================================
+ * Main Content Container
+ * ==========================================
+ * Centers content and keeps it inside the viewport.
  */
 .container {
+  width: 100%;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 16px;
 }
 
 /**
- * Card components
- * Used for project cards, panels, etc.
+ * ==========================================
+ * Shared Card Components
+ * ==========================================
+ * Base glass card style used across the app.
  */
 .card {
+  width: 100%;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
 }
 
-/* Softer card variant (less shadow emphasis) */
 .card-soft {
+  width: 100%;
   background: var(--panel2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  backdrop-filter: blur(6px);
 }
 
 /**
- * Tag / badge styling
- * Commonly used for tech stack labels.
+ * ==========================================
+ * Tag / Pill Styling
+ * ==========================================
+ * Allows tags to wrap instead of stretching layout.
  */
 .pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
   font-size: 12px;
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(0,0,0,0.12);
-  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.12);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-/* Text helper classes */
-.muted { color: var(--muted); }
-.muted2 { color: var(--muted2); }
-
 /**
- * Typography helpers
- * Keeps heading sizes consistent across pages.
+ * ==========================================
+ * Text Helpers
+ * ==========================================
  */
-.h1 { font-size: 34px; margin: 0 0 6px; }
-.h2 { font-size: 18px; margin: 0 0 10px; }
-.h3 { font-size: 14px; margin: 16px 0 8px; opacity: 0.95; }
+.muted {
+  color: var(--muted);
+}
+
+.muted2 {
+  color: var(--muted2);
+}
 
 /**
- * Layout utility classes
+ * ==========================================
+ * Typography Helpers
+ * ==========================================
+ * Uses clamp so headings scale better on mobile.
+ */
+.h1 {
+  font-size: clamp(28px, 5vw, 34px);
+  margin: 0 0 6px;
+}
+
+.h2 {
+  font-size: clamp(16px, 3vw, 18px);
+  margin: 0 0 10px;
+}
+
+.h3 {
+  font-size: clamp(13px, 2vw, 14px);
+  margin: 16px 0 8px;
+  opacity: 0.95;
+}
+
+/**
+ * ==========================================
+ * Utility Layout Classes
+ * ==========================================
  */
 .row {
   display: flex;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
 .spacer {
@@ -151,8 +217,11 @@ a:hover {
 }
 
 /**
- * Page layout structure
- * Enables sticky footer layout.
+ * ==========================================
+ * Page Structure
+ * ==========================================
+ * Sticky footer layout with transparent main area
+ * so the body gradient stays continuous.
  */
 .page {
   min-height: 100vh;
@@ -160,18 +229,33 @@ a:hover {
   flex-direction: column;
 }
 
-/* Main page content grows to fill available space */
 .pageMain {
   flex: 1;
+  background: transparent;
 }
 
 /**
- * Background fade effect at bottom
- * Prevents abrupt cutoff of gradient background.
+ * ==========================================
+ * Optional Background Fade
+ * ==========================================
+ * Keep transparent unless you specifically need it.
+ * This avoids visible color band differences.
  */
 .bgFadeBottom {
-  background:
-    radial-gradient(1200px 600px at 10% 0%, rgba(120, 140, 255, 0.18), transparent 60%),
-    radial-gradient(1000px 600px at 90% 10%, rgba(0, 200, 180, 0.14), transparent 55%),
-    linear-gradient(to bottom, transparent 70%, rgba(0,0,0,0.10) 100%);
+  background: transparent;
+}
+
+/**
+ * ==========================================
+ * Mobile Adjustments
+ * ==========================================
+ */
+@media (max-width: 600px) {
+  .container {
+    padding: 12px;
+  }
+
+  .row {
+    gap: 8px;
+  }
 }
