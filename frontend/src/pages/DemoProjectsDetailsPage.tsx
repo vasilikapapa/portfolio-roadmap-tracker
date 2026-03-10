@@ -540,6 +540,11 @@ export default function DemoProjectDetailsPage() {
               </div>
             }
           />
+          {data.project.description && (
+            <div className="projectDescription">
+              {data.project.description}
+            </div>
+          )}
 
           <div className="spacer" />
 
@@ -1041,8 +1046,7 @@ export default function DemoProjectDetailsPage() {
                       padding: 10,
                       borderRadius: 10,
                       border: "1px solid var(--border)",
-                      background: "rgba(0,0,0,0.12)",
-                      color: "var(--text)",
+                     
                     }}
                   >
                     <option value="">General project update</option>

@@ -284,8 +284,19 @@
   font-size: 12px;
   opacity: 0.8;
 }
+select {
+  background: #111827;
+  color: white;
+}
 
-
+select option {
+  background: #111827;
+  color: white;
+}
+select option:checked {
+  background: #2563eb;
+  color: white;
+}
 
 @keyframes acmFadeIn {
   from { opacity: 0; }
@@ -378,6 +389,13 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.projectDescription {
+  margin-top: 8px;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 900px;
 }
 
 @media (max-width: 700px) {

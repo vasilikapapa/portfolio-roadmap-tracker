@@ -517,7 +517,11 @@ export default function AdminProjectDetailsPage() {
               </div>
             }
           />
-
+          {data.project.description && (
+            <div className="projectDescription">
+              {data.project.description}
+            </div>
+          )}
           <div className="spacer" />
 
           <section>
@@ -1022,8 +1026,7 @@ export default function AdminProjectDetailsPage() {
                       padding: 10,
                       borderRadius: 10,
                       border: "1px solid var(--border)",
-                      background: "rgba(0,0,0,0.12)",
-                      color: "var(--text)",
+                      
                     }}
                   >
                     <option value="">General project update</option>

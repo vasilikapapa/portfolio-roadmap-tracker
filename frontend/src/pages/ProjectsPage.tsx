@@ -401,7 +401,7 @@ export default function ProjectsPage() {
                 </div>
 
                 {p.summary ? <p className="projectSummary">{p.summary}</p> : null}
-                {p.description ? <p className="projectDescription">{p.description}</p> : null}
+              
 
                 {/* Edit is always visible in public view */}
                 <div style={{ marginTop: 10, display: "flex", gap: 10 }}>

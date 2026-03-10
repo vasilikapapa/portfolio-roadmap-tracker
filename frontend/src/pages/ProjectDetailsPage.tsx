@@ -279,7 +279,12 @@ export default function ProjectDetailsPage() {
               </div>
             }
           />
-
+           {data.project.description && (
+              <div className="projectDescription">
+                {data.project.description}
+              </div>
+            )}
+            
           <div className="spacer" />
 
           {/* =========================
