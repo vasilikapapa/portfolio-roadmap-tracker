@@ -78,10 +78,13 @@ export type TaskDto = {
 export type UpdateDto = {
   id: string;
   projectId: string;
+  taskId?: string | null;
+  taskTitle?: string | null;
   title: string;
   body: string;
   createdAt: string;
 };
+
 
 export type ProjectDetailsDto = {
   project: ProjectDto;
@@ -99,6 +102,7 @@ export type CreateTaskRequest = {
 };
 
 export type CreateUpdateRequest = {
+  taskId?: string | null;
   title: string;
   body: string;
 };

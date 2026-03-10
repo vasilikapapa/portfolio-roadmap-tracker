@@ -11,6 +11,7 @@ import {
   type ProjectDetailsDto,
   type TaskDto,
   type TaskStatus,
+  type UpdateDto,
 } from "../lib/api";
 
 import "../styles/projectDetails.css";
@@ -29,6 +30,38 @@ function groupByStatus(tasks: TaskDto[]) {
   for (const t of tasks) {
     map[t.status].push(t);
   }
+
+  return map;
+}
+
+/**
+ * Groups updates by related task.
+ *
+ * Rules:
+ * - If update.taskId exists, group under that task
+ * - Otherwise place it under "general"
+ * - Each group is sorted newest first
+ */
+function groupUpdatesByTask(updates: UpdateDto[]) {
+  const map: Record<string, UpdateDto[]> = {};
+
+  for (const update of updates) {
+    const key = update.taskId ?? "general";
+
+    if (!map[key]) {
+      map[key] = [];
+    }
+
+    map[key].push(update);
+  }
+
+  for (const key of Object.keys(map)) {
+    map[key].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
   return map;
 }
 
@@ -59,10 +92,11 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
  *
  * Purpose:
  * - Anyone can view project details, tasks, and updates
-
  *
  * Notes:
  * - This page remains read-only
+ * - Users can still click Edit, but protected access is handled
+ *   through admin/demo login routing
  */
 export default function ProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -109,7 +143,8 @@ export default function ProjectDetailsPage() {
   const grouped = useMemo(() => groupByStatus(data?.tasks ?? []), [data]);
 
   /**
-   * Sort updates newest-first (memoized).
+   * Flat newest-first updates.
+   * Still useful for empty state checks.
    */
   const updatesSorted = useMemo(() => {
     const u = [...(data?.updates ?? [])];
@@ -118,6 +153,36 @@ export default function ProjectDetailsPage() {
     );
     return u;
   }, [data]);
+
+  /**
+   * Group updates by related task.
+   * This makes the public project history easier to follow.
+   */
+  const updatesGrouped = useMemo(() => {
+    return groupUpdatesByTask(data?.updates ?? []);
+  }, [data]);
+
+  /**
+   * Quick lookup for task id -> task object.
+   * Used to show task title and target version in grouped update sections.
+   */
+  const taskLookup = useMemo(() => {
+    const map = new Map<string, TaskDto>();
+
+    for (const task of data?.tasks ?? []) {
+      map.set(task.id, task);
+    }
+
+    return map;
+  }, [data]);
+
+  /**
+   * Group ids for task-linked update sections.
+   * Excludes the special "general" bucket.
+   */
+  const groupedTaskIds = useMemo(() => {
+    return Object.keys(updatesGrouped).filter((key) => key !== "general");
+  }, [updatesGrouped]);
 
   /**
    * Main project edit button in page header.
@@ -141,8 +206,6 @@ export default function ProjectDetailsPage() {
     setChoiceOpen(true);
   }
 
-
-
   /**
    * Access choice -> Admin login
    *
@@ -151,6 +214,7 @@ export default function ProjectDetailsPage() {
    */
   function goAdminLogin() {
     if (!data) return;
+
     navigate(
       `/admin/login?next=${encodeURIComponent(
         `/admin/projects/${data.project.slug}`
@@ -166,6 +230,7 @@ export default function ProjectDetailsPage() {
    */
   function goDemoLogin() {
     if (!data) return;
+
     navigate(
       `/demo/login?next=${encodeURIComponent(
         `/demo/projects/${data.project.slug}`
@@ -251,9 +316,7 @@ export default function ProjectDetailsPage() {
                           <span className="pill">{t.status}</span>
                         </div>
 
-                        <div className="taskFooter">
-                          Updated {fmt(t.updatedAt)}
-                        </div>
+                        <div className="taskFooter">Updated {fmt(t.updatedAt)}</div>
                       </div>
                     ))}
 
@@ -271,28 +334,84 @@ export default function ProjectDetailsPage() {
           <div className="spacer" />
 
           {/* =========================
-              Updates timeline (READ-ONLY)
+              Updates grouped by task
+              (READ-ONLY)
              ========================= */}
           <section>
             <h2 className="h2">Updates</h2>
 
-            <div className="updates">
-              {updatesSorted.map((u) => (
-                <div key={u.id} className="card updateCard">
-                  <div className="updateHeader">
-                    <div className="updateTitle">{u.title}</div>
-                    <div className="updateTime">{fmt(u.createdAt)}</div>
-                  </div>
+            {updatesSorted.length === 0 ? (
+              <p className="muted">No updates yet.</p>
+            ) : (
+              <div className="updates-groups">
+                {/* =========================
+                    General project updates
+                   ========================= */}
+                {updatesGrouped.general?.length ? (
+                  <section className="update-group">
+                    <div className="update-group-header">
+                      <h3>General Project Updates</h3>
+                      <span>{updatesGrouped.general.length}</span>
+                    </div>
 
-                  <div className="updateBody">{u.body}</div>
-        
-                </div>
-              ))}
+                    <div className="updates-list">
+                      {updatesGrouped.general.map((u) => (
+                        <article key={u.id} className="update-card">
+                          <div className="update-card-top">
+                            <div>
+                              <h4>{u.title}</h4>
+                              <p className="update-meta">{fmt(u.createdAt)}</p>
+                            </div>
+                          </div>
 
-              {updatesSorted.length === 0 ? (
-                <p className="muted">No updates yet.</p>
-              ) : null}
-            </div>
+                          <p>{u.body}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {/* =========================
+                    Task-specific update groups
+                   ========================= */}
+                {groupedTaskIds.map((taskId) => {
+                  const task = taskLookup.get(taskId);
+                  const updates = updatesGrouped[taskId] ?? [];
+
+                  return (
+                    <section key={taskId} className="update-group">
+                      <div className="update-group-header">
+                        <div>
+                          <h3>{task?.title ?? "Related Task"}</h3>
+                          {task?.targetVersion ? (
+                            <p className="update-group-subtitle">
+                              Target version: {task.targetVersion}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <span>{updates.length}</span>
+                      </div>
+
+                      <div className="updates-list">
+                        {updates.map((u) => (
+                          <article key={u.id} className="update-card">
+                            <div className="update-card-top">
+                              <div>
+                                <h4>{u.title}</h4>
+                                <p className="update-meta">{fmt(u.createdAt)}</p>
+                              </div>
+                            </div>
+
+                            <p>{u.body}</p>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* =========================

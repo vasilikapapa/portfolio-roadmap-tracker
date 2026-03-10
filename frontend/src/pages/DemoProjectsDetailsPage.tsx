@@ -25,7 +25,42 @@ function groupByStatus(tasks: TaskDto[]) {
     IN_PROGRESS: [],
     DONE: [],
   };
-  for (const t of tasks) map[t.status].push(t);
+
+  for (const t of tasks) {
+    map[t.status].push(t);
+  }
+
+  return map;
+}
+
+/**
+ * Groups updates by related task.
+ *
+ * Rules:
+ * - If update.taskId exists, group under that task
+ * - Otherwise place it under "general"
+ * - Each group is sorted newest first
+ */
+function groupUpdatesByTask(updates: UpdateDto[]) {
+  const map: Record<string, UpdateDto[]> = {};
+
+  for (const update of updates) {
+    const key = update.taskId ?? "general";
+
+    if (!map[key]) {
+      map[key] = [];
+    }
+
+    map[key].push(update);
+  }
+
+  for (const key of Object.keys(map)) {
+    map[key].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
   return map;
 }
 
@@ -106,6 +141,10 @@ export default function DemoProjectDetailsPage() {
   const [creatingTask, setCreatingTask] = useState(false);
 
   // Update form state
+  // 
+  // - uTaskId lets demo updates optionally point to a roadmap task
+  // - empty string means general project update
+  const [uTaskId, setUTaskId] = useState("");
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
@@ -132,15 +171,22 @@ export default function DemoProjectDetailsPage() {
     setUpdateErrors({});
     setUpdateServerError(null);
     setEditingUpdate(null);
+    setUTaskId("");
     setUTitle("");
     setUBody("");
   }
 
+  /**
+   * Close task modal and clear its state.
+   */
   function closeTaskModal() {
     setTaskModalOpen(false);
     resetTaskModalState();
   }
 
+  /**
+   * Close update modal and clear its state.
+   */
   function closeUpdateModal() {
     setUpdateModalOpen(false);
     resetUpdateModalState();
@@ -199,8 +245,15 @@ export default function DemoProjectDetailsPage() {
     }
   }, [taskModalOpen, updateModalOpen]);
 
+  /**
+   * Groups tasks into their Kanban columns.
+   */
   const grouped = useMemo(() => groupByStatus(data?.tasks ?? []), [data]);
 
+  /**
+   * Keeps a flat sorted version of updates.
+   * Useful for checking empty state and overall ordering.
+   */
   const updatesSorted = useMemo(() => {
     const u = [...(data?.updates ?? [])];
     u.sort(
@@ -208,6 +261,35 @@ export default function DemoProjectDetailsPage() {
     );
     return u;
   }, [data]);
+
+  /**
+   * Groups updates by related task.
+   * This is what powers the grouped Updates UI.
+   */
+  const updatesGrouped = useMemo(() => {
+    return groupUpdatesByTask(data?.updates ?? []);
+  }, [data]);
+
+  /**
+   * Quick lookup map for task id -> task object.
+   * Helps display task names for grouped updates.
+   */
+  const taskLookup = useMemo(() => {
+    const map = new Map<string, TaskDto>();
+
+    for (const task of data?.tasks ?? []) {
+      map.set(task.id, task);
+    }
+
+    return map;
+  }, [data]);
+
+  /**
+   * List of task group ids excluding the special "general" group.
+   */
+  const groupedTaskIds = useMemo(() => {
+    return Object.keys(updatesGrouped).filter((key) => key !== "general");
+  }, [updatesGrouped]);
 
   /**
    * Open task modal in CREATE mode.
@@ -247,12 +329,16 @@ export default function DemoProjectDetailsPage() {
 
   /**
    * Open update modal in EDIT mode and prefill fields.
+   *
+   * 
+   * - preload related task if update is linked to one
    */
   function openEditUpdateModal(update: UpdateDto) {
     setEditingUpdate(update);
     setUpdateServerError(null);
     setUpdateErrors({});
 
+    setUTaskId(update.taskId ?? "");
     setUTitle(update.title ?? "");
     setUBody(update.body ?? "");
 
@@ -302,6 +388,9 @@ export default function DemoProjectDetailsPage() {
 
   /**
    * Create or update a demo update entry.
+   *
+   * - taskId is optional
+   * - null means general project update
    */
   async function onSubmitUpdate() {
     if (!data) return;
@@ -316,6 +405,7 @@ export default function DemoProjectDetailsPage() {
     if (Object.keys(nextErrors).length > 0) return;
 
     const payload: CreateUpdateRequest = {
+      taskId: uTaskId || null,
       title: uTitle.trim(),
       body: uBody.trim(),
     };
@@ -375,12 +465,12 @@ export default function DemoProjectDetailsPage() {
   /**
    * Delete demo update.
    */
-  async function onDeleteUpdate(projectID: string, updateId: string) {
+  async function onDeleteUpdate(projectId: string, updateId: string) {
     if (!confirm("Delete this update?")) return;
 
     try {
       setPageError(null);
-      await api.demoDeleteUpdate(projectID, updateId);
+      await api.demoDeleteUpdate(projectId, updateId);
       await load();
     } catch (e: any) {
       setPageError(String(e?.message ?? e));
@@ -499,6 +589,7 @@ export default function DemoProjectDetailsPage() {
                             value={t.status}
                             onChange={async (e) => {
                               if (!data) return;
+
                               const next = e.target.value as TaskStatus;
                               await api.demoUpdateTask(data.project.id, t.id, {
                                 status: next,
@@ -565,54 +656,142 @@ export default function DemoProjectDetailsPage() {
           <section>
             <h2 className="h2">Updates</h2>
 
-            <div className="updates">
-              {updatesSorted.map((u) => (
-                <div key={u.id} className="card updateCard">
-                  <div className="updateHeader">
-                    <div className="updateTitle">{u.title}</div>
-                    <div className="updateTime">{fmt(u.createdAt)}</div>
-                  </div>
+            {updatesSorted.length === 0 ? (
+              <p className="muted">No updates yet.</p>
+            ) : (
+              <div className="updates-groups">
+                {/* =========================
+                    General project updates
+                   ========================= */}
+                {updatesGrouped.general?.length ? (
+                  <section className="update-group">
+                    <div className="update-group-header">
+                      <h3>General Project Updates</h3>
+                      <span>{updatesGrouped.general.length}</span>
+                    </div>
 
-                  <div className="updateBody">{u.body}</div>
+                    <div className="updates-list">
+                      {updatesGrouped.general.map((u) => (
+                        <article key={u.id} className="update-card">
+                          <div className="update-card-top">
+                            <div>
+                              <h4>{u.title}</h4>
+                              <p className="update-meta">{fmt(u.createdAt)}</p>
+                            </div>
 
-                  <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-                    <button
-                      type="button"
-                      onClick={() => openEditUpdateModal(u)}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: 10,
-                        border: "1px solid var(--border)",
-                        background: "rgba(255,255,255,0.08)",
-                        color: "var(--text)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Edit Update
-                    </button>
+                            <div className="update-actions">
+                              <button
+                                type="button"
+                                onClick={() => openEditUpdateModal(u)}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: 10,
+                                  border: "1px solid var(--border)",
+                                  background: "rgba(255,255,255,0.08)",
+                                  color: "var(--text)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Edit Update
+                              </button>
 
-                    <button
-                      type="button"
-                      onClick={() => onDeleteUpdate(data.project.id, u.id)}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: 10,
-                        border: "1px solid var(--border)",
-                        background: "rgba(255, 80, 80, 0.12)",
-                        color: "var(--text)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Delete Update
-                    </button>
-                  </div>
-                </div>
-              ))}
+                              <button
+                                type="button"
+                                onClick={() => onDeleteUpdate(data.project.id, u.id)}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: 10,
+                                  border: "1px solid var(--border)",
+                                  background: "rgba(255, 80, 80, 0.12)",
+                                  color: "var(--text)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Delete Update
+                              </button>
+                            </div>
+                          </div>
 
-              {updatesSorted.length === 0 ? (
-                <p className="muted">No updates yet.</p>
-              ) : null}
-            </div>
+                          <p>{u.body}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {/* =========================
+                    Task-specific update groups
+                   ========================= */}
+                {groupedTaskIds.map((taskId) => {
+                  const task = taskLookup.get(taskId);
+                  const updates = updatesGrouped[taskId] ?? [];
+
+                  return (
+                    <section key={taskId} className="update-group">
+                      <div className="update-group-header">
+                        <div>
+                          <h3>{task?.title ?? "Related Task"}</h3>
+                          {task?.targetVersion ? (
+                            <p className="update-group-subtitle">
+                              Target version: {task.targetVersion}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <span>{updates.length}</span>
+                      </div>
+
+                      <div className="updates-list">
+                        {updates.map((u) => (
+                          <article key={u.id} className="update-card">
+                            <div className="update-card-top">
+                              <div>
+                                <h4>{u.title}</h4>
+                                <p className="update-meta">{fmt(u.createdAt)}</p>
+                              </div>
+
+                              <div className="update-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditUpdateModal(u)}
+                                  style={{
+                                    padding: "8px 10px",
+                                    borderRadius: 10,
+                                    border: "1px solid var(--border)",
+                                    background: "rgba(255,255,255,0.08)",
+                                    color: "var(--text)",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Edit Update
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteUpdate(data.project.id, u.id)}
+                                  style={{
+                                    padding: "8px 10px",
+                                    borderRadius: 10,
+                                    border: "1px solid var(--border)",
+                                    background: "rgba(255, 80, 80, 0.12)",
+                                    color: "var(--text)",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Delete Update
+                                </button>
+                              </div>
+                            </div>
+
+                            <p>{u.body}</p>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* =========================
@@ -675,6 +854,7 @@ export default function DemoProjectDetailsPage() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setTTitle(v);
+
                       if (taskErrors.title && v.trim()) {
                         setTaskErrors((prev) => ({ ...prev, title: undefined }));
                       }
@@ -853,11 +1033,33 @@ export default function DemoProjectDetailsPage() {
                 )}
 
                 <div style={{ display: "grid", gap: 10 }}>
+                  {/* Optional task selection for linking update to roadmap work */}
+                  <select
+                    value={uTaskId}
+                    onChange={(e) => setUTaskId(e.target.value)}
+                    style={{
+                      padding: 10,
+                      borderRadius: 10,
+                      border: "1px solid var(--border)",
+                      background: "rgba(0,0,0,0.12)",
+                      color: "var(--text)",
+                    }}
+                  >
+                    <option value="">General project update</option>
+
+                    {(data.tasks ?? []).map((task) => (
+                      <option key={task.id} value={task.id}>
+                        {task.title}
+                      </option>
+                    ))}
+                  </select>
+
                   <input
                     value={uTitle}
                     onChange={(e) => {
                       const v = e.target.value;
                       setUTitle(v);
+
                       if (updateErrors.title && v.trim()) {
                         setUpdateErrors((prev) => ({ ...prev, title: undefined }));
                       }
@@ -883,6 +1085,7 @@ export default function DemoProjectDetailsPage() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setUBody(v);
+
                       if (updateErrors.body && v.trim()) {
                         setUpdateErrors((prev) => ({ ...prev, body: undefined }));
                       }
