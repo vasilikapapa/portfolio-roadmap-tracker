@@ -115,11 +115,27 @@ public class ProjectAdminService {
      */
     @Transactional
     public UpdateDto createUpdate(UUID projectId, CreateUpdateRequest req) {
-
         var project = projects.findById(projectId).orElseThrow();
 
         var u = new Update();
         u.setProject(project);
+
+        /*
+         * Optional task association:
+         * - If taskId is missing => project-level update
+         * - If taskId is present => validate task exists and belongs to this project
+         */
+        if (req.taskId() != null) {
+            var task = tasks.findById(req.taskId())
+                    .orElseThrow(() -> new java.util.NoSuchElementException("Task not found: " + req.taskId()));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new IllegalArgumentException("Task does not belong to project: " + projectId);
+            }
+
+            u.setTask(task);
+        }
+
         u.setTitle(req.title());
         u.setBody(req.body());
         u.setCreatedAt(Instant.now());

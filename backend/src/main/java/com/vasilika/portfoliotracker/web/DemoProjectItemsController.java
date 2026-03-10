@@ -426,8 +426,31 @@ public class DemoProjectItemsController {
         }
 
         Update u = new Update();
-        u.setId(UUID.randomUUID()); // remove if @GeneratedValue is used
+        u.setId(UUID.randomUUID());
         u.setProject(project);
+
+        /*
+         * Optional task reference:
+         * - lets demo users attach an update to a specific roadmap task
+         * - task must belong to the same demo project
+         */
+        if (req.taskId() != null) {
+            Task task = tasks.findById(req.taskId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Task not found: " + req.taskId()
+                    ));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Task does not belong to this project"
+                );
+            }
+
+            u.setTask(task);
+        }
+
         u.setTitle(req.title());
         u.setBody(req.body());
         u.setCreatedAt(Instant.now());
