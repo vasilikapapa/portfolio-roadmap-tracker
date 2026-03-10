@@ -123,6 +123,19 @@ public class AdminProjectItemsController {
         Update u = new Update();
         u.setId(UUID.randomUUID());
         u.setProject(project);
+
+        // Optional related task
+        if (req.taskId() != null) {
+            Task task = tasks.findById(req.taskId())
+                    .orElseThrow(() -> new IllegalArgumentException("Task not found: " + req.taskId()));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new IllegalArgumentException("Task does not belong to project: " + projectId);
+            }
+
+            u.setTask(task);
+        }
+
         u.setTitle(req.title());
         u.setBody(req.body());
         u.setCreatedAt(Instant.now());
@@ -275,6 +288,7 @@ public class AdminProjectItemsController {
      * Supports:
      * - title
      * - body
+     * -taskId
      */
     @PatchMapping("/{projectId}/updates/{updateId}")
     public ResponseEntity<UpdateDto> updateUpdate(
@@ -290,10 +304,37 @@ public class AdminProjectItemsController {
             return ResponseEntity.notFound().build();
         }
 
+        /**
+         * Update related task.
+         *
+         * Rules:
+         * - null taskId => general project update
+         * - non-null taskId => task must exist and belong to this same project
+         */
+        if (req.taskId() != null) {
+            Task task = tasks.findById(req.taskId())
+                    .orElseThrow(() -> new IllegalArgumentException("Task not found: " + req.taskId()));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new IllegalArgumentException("Task does not belong to project: " + projectId);
+            }
+
+            u.setTask(task);
+        }
+
+        /**
+         * Allow removing task association.
+         *
+         * Frontend sends null when user chooses
+         * "General project update".
+         */
+        if (req.taskId() == null) {
+            u.setTask(null);
+        }
+
         // Partial field updates
         if (req.title() != null) u.setTitle(req.title());
         if (req.body() != null) u.setBody(req.body());
-        if (req.createdAt() !=null) u.setCreatedAt(Instant.now());
 
         Update saved = updates.save(u);
         return ResponseEntity.ok(UpdateMapper.toDto(saved));
