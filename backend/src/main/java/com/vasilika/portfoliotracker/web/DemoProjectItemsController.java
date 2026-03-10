@@ -28,7 +28,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-
+import com.vasilika.portfoliotracker.domain.PlanningItem;
+import com.vasilika.portfoliotracker.repo.PlanningItemRepository;
+import com.vasilika.portfoliotracker.web.dto.PlanningItemDto;
+import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardItemRequest;
+import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardRequest;
+import com.vasilika.portfoliotracker.web.mapper.PlanningItemMapper;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Locale;
@@ -63,16 +68,19 @@ public class DemoProjectItemsController {
     private final TaskRepository tasks;
     private final UpdateRepository updates;
     private final DemoSeederService demoSeeder;
+    private final PlanningItemRepository planningItems;
 
     public DemoProjectItemsController(
             ProjectRepository projects,
             TaskRepository tasks,
             UpdateRepository updates,
+            PlanningItemRepository planningItems,
             DemoSeederService demoSeeder
     ) {
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
+        this.planningItems = planningItems;
         this.demoSeeder = demoSeeder;
     }
 
@@ -582,6 +590,106 @@ public class DemoProjectItemsController {
     public ResponseEntity<?> resetDemo() {
         demoSeeder.seedDemoData();
         return ResponseEntity.noContent().build();
+    }
+    /**
+     * ==========================================================
+     * GET /demo/projects/{projectId}/planning
+     * ==========================================================
+     *
+     * Returns the saved planning board for a demo project.
+     */
+    @GetMapping("/{projectId}/planning")
+    public ResponseEntity<java.util.List<PlanningItemDto>> getDemoPlanningBoard(
+            @PathVariable UUID projectId
+    ) {
+        var projectOpt = projects.findById(projectId);
+        if (projectOpt.isEmpty() || !projectOpt.get().isDemo()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var items = planningItems.findByProject_IdOrderBySortOrderAscCreatedAtAsc(projectId)
+                .stream()
+                .filter(item -> item.getTask().getStatus() != TaskStatus.DONE)
+                .map(PlanningItemMapper::toDto)
+                .toList();
+
+        return ResponseEntity.ok(items);
+    }
+
+    /**
+     * ==========================================================
+     * PUT /demo/projects/{projectId}/planning
+     * ==========================================================
+     *
+     * Replaces the full demo planning board.
+     */
+    @PutMapping("/{projectId}/planning")
+    public ResponseEntity<java.util.List<PlanningItemDto>> saveDemoPlanningBoard(
+            @PathVariable UUID projectId,
+            @Valid @RequestBody SavePlanningBoardRequest req
+    ) {
+        var projectOpt = projects.findById(projectId);
+        if (projectOpt.isEmpty() || !projectOpt.get().isDemo()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Project project = projectOpt.get();
+
+        long currentCount = req.items().stream()
+                .filter(SavePlanningBoardItemRequest::isCurrent)
+                .count();
+
+        if (currentCount > 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Only one planning item can be marked as current."
+            );
+        }
+
+        planningItems.deleteByProject_Id(projectId);
+
+        java.util.List<PlanningItem> savedItems = new java.util.ArrayList<>();
+
+        for (int i = 0; i < req.items().size(); i++) {
+            SavePlanningBoardItemRequest incoming = req.items().get(i);
+
+            Task task = tasks.findById(incoming.taskId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Task not found: " + incoming.taskId()
+                    ));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Task does not belong to this project"
+                );
+            }
+
+            if (task.getStatus() == TaskStatus.DONE) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "DONE tasks cannot be added to the planning board."
+                );
+            }
+
+            PlanningItem item = new PlanningItem();
+            item.setId(UUID.randomUUID());
+            item.setProject(project);
+            item.setTask(task);
+            item.setSortOrder(i);
+            item.setCurrent(incoming.isCurrent());
+            item.setCreatedAt(Instant.now());
+            item.setUpdatedAt(Instant.now());
+
+            savedItems.add(planningItems.save(item));
+        }
+
+        var response = savedItems.stream()
+                .map(PlanningItemMapper::toDto)
+                .toList();
+
+        return ResponseEntity.ok(response);
     }
 
     /**

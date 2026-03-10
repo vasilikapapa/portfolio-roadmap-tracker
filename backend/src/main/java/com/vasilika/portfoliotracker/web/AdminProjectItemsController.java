@@ -17,7 +17,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-
+import com.vasilika.portfoliotracker.domain.PlanningItem;
+import com.vasilika.portfoliotracker.repo.PlanningItemRepository;
+import com.vasilika.portfoliotracker.web.dto.PlanningItemDto;
+import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardItemRequest;
+import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardRequest;
+import com.vasilika.portfoliotracker.web.mapper.PlanningItemMapper;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Locale;
@@ -30,11 +35,13 @@ public class AdminProjectItemsController {
     private final ProjectRepository projects;
     private final TaskRepository tasks;
     private final UpdateRepository updates;
+    private final PlanningItemRepository planningItems;
 
-    public AdminProjectItemsController(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates) {
+    public AdminProjectItemsController(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates,  PlanningItemRepository planningItems) {
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
+        this.planningItems = planningItems;
     }
 
     /**
@@ -339,7 +346,103 @@ public class AdminProjectItemsController {
         Update saved = updates.save(u);
         return ResponseEntity.ok(UpdateMapper.toDto(saved));
     }
+    /**
+     * ==========================================================
+     * GET /admin/projects/{projectId}/planning
+     * ==========================================================
+     *
+     * Returns the project's saved planning board.
+     *
+     * Rules:
+     * - items are returned in sort order
+     * - DONE tasks are excluded automatically
+     */
+    @GetMapping("/{projectId}/planning")
+    public ResponseEntity<java.util.List<PlanningItemDto>> getPlanningBoard(
+            @PathVariable UUID projectId
+    ) {
+        Project project = projects.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
 
+        var items = planningItems.findByProject_IdOrderBySortOrderAscCreatedAtAsc(project.getId())
+                .stream()
+                .filter(item -> item.getTask().getStatus() != TaskStatus.DONE)
+                .map(PlanningItemMapper::toDto)
+                .toList();
+
+        return ResponseEntity.ok(items);
+    }
+
+    /**
+     * ==========================================================
+     * PUT /admin/projects/{projectId}/planning
+     * ==========================================================
+     *
+     * Replaces the full planning board for the project.
+     *
+     * Why replace the whole board?
+     * - simpler frontend
+     * - easier reorder support
+     * - one request saves the whole queue state
+     *
+     * Rules:
+     * - all tasks must belong to the same project
+     * - DONE tasks cannot be placed in planning board
+     * - at most one item can be marked current
+     */
+    @PutMapping("/{projectId}/planning")
+    public ResponseEntity<java.util.List<PlanningItemDto>> savePlanningBoard(
+            @PathVariable UUID projectId,
+            @Valid @RequestBody SavePlanningBoardRequest req
+    ) {
+        Project project = projects.findById(projectId)
+                .orElseThrow(() -> new IllegalArgumentException("Project not found: " + projectId));
+
+        long currentCount = req.items().stream()
+                .filter(SavePlanningBoardItemRequest::isCurrent)
+                .count();
+
+        if (currentCount > 1) {
+            throw new IllegalArgumentException("Only one planning item can be marked as current.");
+        }
+
+        // Clear old board and recreate it from the incoming ordered list
+        planningItems.deleteByProject_Id(projectId);
+
+        java.util.List<PlanningItem> savedItems = new java.util.ArrayList<>();
+
+        for (int i = 0; i < req.items().size(); i++) {
+            SavePlanningBoardItemRequest incoming = req.items().get(i);
+
+            Task task = tasks.findById(incoming.taskId())
+                    .orElseThrow(() -> new IllegalArgumentException("Task not found: " + incoming.taskId()));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new IllegalArgumentException("Task does not belong to project: " + projectId);
+            }
+
+            if (task.getStatus() == TaskStatus.DONE) {
+                throw new IllegalArgumentException("DONE tasks cannot be added to the planning board.");
+            }
+
+            PlanningItem item = new PlanningItem();
+            item.setId(UUID.randomUUID());
+            item.setProject(project);
+            item.setTask(task);
+            item.setSortOrder(i);
+            item.setCurrent(incoming.isCurrent());
+            item.setCreatedAt(Instant.now());
+            item.setUpdatedAt(Instant.now());
+
+            savedItems.add(planningItems.save(item));
+        }
+
+        var response = savedItems.stream()
+                .map(PlanningItemMapper::toDto)
+                .toList();
+
+        return ResponseEntity.ok(response);
+    }
 
     /**
      * Helper for mapping string values to enums safely.
