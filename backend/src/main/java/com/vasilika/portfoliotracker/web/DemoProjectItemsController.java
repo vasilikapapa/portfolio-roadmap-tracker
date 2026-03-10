@@ -495,10 +495,39 @@ public class DemoProjectItemsController {
             return ResponseEntity.notFound().build();
         }
 
+        /*
+         * Update related task.
+         *
+         * Rules:
+         * - null taskId => general project update
+         * - non-null taskId => task must exist and belong to this same demo project
+         */
+        if (req.taskId() != null) {
+            Task task = tasks.findById(req.taskId())
+                    .orElseThrow(() -> new ResponseStatusException(
+                            HttpStatus.NOT_FOUND,
+                            "Task not found: " + req.taskId()
+                    ));
+
+            if (!task.getProject().getId().equals(projectId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Task does not belong to this project"
+                );
+            }
+
+            u.setTask(task);
+        } else {
+            /*
+             * If taskId is null, remove task association
+             * and make it a general project update.
+             */
+            u.setTask(null);
+        }
+
         // Partial field updates
         if (req.title() != null) u.setTitle(req.title());
         if (req.body() != null) u.setBody(req.body());
-        if (req.createdAt() !=null) u.setCreatedAt(Instant.now());
 
         Update saved = updates.save(u);
         return ResponseEntity.ok(UpdateMapper.toDto(saved));
