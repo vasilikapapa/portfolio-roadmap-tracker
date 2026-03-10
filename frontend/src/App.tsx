@@ -11,7 +11,7 @@ import AdminProjectDetailsPage from "./pages/AdminProjectDetailsPage";
 import DemoLoginPage from "./pages/DemoLoginPage";
 import DemoHomePage from "./pages/DemoHomePage";
 import DemoProjectDetailsPage from "./pages/DemoProjectsDetailsPage";
-
+import PlanningBoardPage from "./pages/PlanningBoardPage";
 
 // Use ONE admin guard approach
 import RequireAuth from "./RequireAuth";
@@ -34,7 +34,7 @@ export default function App() {
         {/* PUBLIC */}
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:slug" element={<ProjectDetailsPage />} />
-
+        <Route path="/admin/projects/:slug/planning" element={<PlanningBoardPage />} />
 
         {/* ADMIN */}
         <Route path="/admin/login" element={<AdminLoginPage />} />

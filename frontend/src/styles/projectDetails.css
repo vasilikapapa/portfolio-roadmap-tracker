@@ -390,7 +390,12 @@ select option:checked {
   gap: 8px;
   flex-wrap: wrap;
 }
-
+.updateDesc {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .projectDescription {
   margin-top: 8px;
   color: var(--muted);
