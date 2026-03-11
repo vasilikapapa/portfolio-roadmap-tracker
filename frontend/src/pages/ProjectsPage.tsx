@@ -243,7 +243,7 @@ export default function ProjectsPage() {
       }
     }
 
-  }, [loading, isAdmin, isDemo, projects]);
+  }, [loading, isAdmin, isDemo, projects, searchParams, setSearchParams]);
 
 
   /** ---------------------------------------------------------
@@ -421,6 +421,7 @@ export default function ProjectsPage() {
               color: "var(--text)",
               cursor: "pointer",
             }}
+            title="Create as Admin or Demo"
           >
             + Create Project
           </button>
@@ -436,6 +437,55 @@ export default function ProjectsPage() {
               {loadingTooLong &&
                 " Backend is waking up, this may take a little longer on first visit."}
             </p>
+
+            <div className="projectGrid">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="projectCard"
+                  style={{
+                    opacity: 0.65,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: 20,
+                      width: "60%",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.14)",
+                      marginBottom: 12,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 12,
+                      width: "100%",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.10)",
+                      marginBottom: 8,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 12,
+                      width: "72%",
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.08)",
+                      marginBottom: 16,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: 34,
+                      width: 70,
+                      borderRadius: 10,
+                      background: "rgba(255,255,255,0.08)",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </>
         )}
 
@@ -511,6 +561,200 @@ export default function ProjectsPage() {
         title={pendingAction === "create" ? "Create a project?" : "Edit this project?"}
         message="Choose how you want to continue."
       />
+     {/* =========================
+          Create/Edit Project Modal
+         ========================= */}
+      {createOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={closeCreateModal}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10, 10, 20, 0.85)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="card"
+            style={{
+              width: "min(720px, 100%)",
+              padding: 20,
+              borderRadius: 18,
+              background: "rgba(25, 25, 35, 0.95)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <h2 className="h2" style={{ marginTop: 0 }}>
+                {editingProject ? "Edit Project" : "Create Project"}
+              </h2>
+
+              <button
+                type="button"
+                onClick={closeCreateModal}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {createError && <p style={{ color: "salmon" }}>{createError}</p>}
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <input
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="Slug (unique) e.g. workout-app"
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.12)",
+                  color: "var(--text)",
+                }}
+              />
+
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name e.g. Workout App"
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.12)",
+                  color: "var(--text)",
+                }}
+              />
+
+              <input
+                value={techStack}
+                onChange={(e) => setTechStack(e.target.value)}
+                placeholder="Tech stack (optional) e.g. React, Spring Boot"
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.12)",
+                  color: "var(--text)",
+                }}
+              />
+
+              <input
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="Summary (optional)"
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.12)",
+                  color: "var(--text)",
+                }}
+              />
+
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Description (optional)"
+                rows={5}
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "rgba(0,0,0,0.12)",
+                  color: "var(--text)",
+                }}
+              />
+
+              <div className="row" style={{ gap: 10 }}>
+                <input
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="Repo URL (optional)"
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                    background: "rgba(0,0,0,0.12)",
+                    color: "var(--text)",
+                    flex: 1,
+                  }}
+                />
+                <input
+                  value={liveUrl}
+                  onChange={(e) => setLiveUrl(e.target.value)}
+                  placeholder="Live URL (optional)"
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    border: "1px solid var(--border)",
+                    background: "rgba(0,0,0,0.12)",
+                    color: "var(--text)",
+                    flex: 1,
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    color: "var(--text)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onSubmitProject}
+                  disabled={creating}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "rgba(255,255,255,0.10)",
+                    color: "var(--text)",
+                    cursor: creating ? "not-allowed" : "pointer",
+                    opacity: creating ? 0.7 : 1,
+                  }}
+                >
+                  {creating
+                    ? editingProject
+                      ? "Saving..."
+                      : "Creating..."
+                    : editingProject
+                    ? "Save Changes"
+                    : "Create Project"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
