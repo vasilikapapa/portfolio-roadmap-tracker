@@ -25,16 +25,40 @@ import "../styles/projects.css";
  * - First load may be slower if backend is waking up from Render cold start
  * - Loading cards help the page feel responsive while data is loading
  */
+
 export default function ProjectsPage() {
+
+  /** -----------------------------
+   * Router + Auth
+   * ----------------------------- */
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAdmin, isDemo } = useAuth();
 
+
+  /** -----------------------------
+   * Page state
+   * ----------------------------- */
+
+  // Loaded projects
   const [projects, setProjects] = useState<ProjectDto[]>([]);
+
+  // Loading / error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Create/Edit modal state
+  /**
+   * If backend takes longer than expected to respond
+   * (for example when Render wakes it from sleep),
+   * we show an additional message to the user.
+   */
+  const [loadingTooLong, setLoadingTooLong] = useState(false);
+
+
+  /** -----------------------------
+   * Create/Edit modal state
+   * ----------------------------- */
+
   const [createOpen, setCreateOpen] = useState(false);
 
   // Form state shared by Create + Edit
@@ -52,25 +76,31 @@ export default function ProjectsPage() {
   // When not null -> modal is in EDIT mode
   const [editingProject, setEditingProject] = useState<ProjectDto | null>(null);
 
-  // Access choice modal (Admin vs Demo)
+
+  /** -----------------------------
+   * Access choice modal
+   * (Admin vs Demo)
+   * ----------------------------- */
+
   const [choiceOpen, setChoiceOpen] = useState(false);
 
   /**
-   * Stores what the user wanted to do before login:
-   * - create
-   * - edit a specific project
+   * Stores what the user wanted to do before login
    */
-  const [pendingAction, setPendingAction] = useState<"create" | "edit" | null>(null);
+  const [pendingAction, setPendingAction] =
+    useState<"create" | "edit" | null>(null);
+
   const [editTarget, setEditTarget] = useState<ProjectDto | null>(null);
 
-  /**
-   * Load projects.
+
+  /** ---------------------------------------------------------
+   * Load projects from backend
    *
-   * - If DEMO is active, show sandbox projects
-   * - Otherwise show public/real projects
+   * - DEMO mode loads sandbox data
+   * - Otherwise loads real projects
    *
-   * mounted guard prevents state updates after unmount.
-   */
+   * mounted guard prevents state updates after unmount
+   * --------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
 
@@ -81,8 +111,12 @@ export default function ProjectsPage() {
       }
 
       try {
-        const list = isDemo ? await api.demoListProjects() : await api.listProjects();
+        const list = isDemo
+          ? await api.demoListProjects()
+          : await api.listProjects();
+
         if (mounted) setProjects(list);
+
       } catch (e: any) {
         if (mounted) setError(String(e?.message ?? e));
       } finally {
@@ -97,16 +131,43 @@ export default function ProjectsPage() {
     };
   }, [isDemo]);
 
-  /**
-   * Reload list after create/update.
-   */
+
+  /** ---------------------------------------------------------
+   * Detect if backend is taking too long
+   *
+   * Render free instances sleep after inactivity.
+   * First request may take ~20–30 seconds.
+   *
+   * After 4 seconds we show a message explaining
+   * that the backend may still be waking up.
+   * --------------------------------------------------------- */
+  useEffect(() => {
+    if (!loading) {
+      setLoadingTooLong(false);
+      return;
+    }
+
+    const t = setTimeout(() => setLoadingTooLong(true), 4000);
+    return () => clearTimeout(t);
+
+  }, [loading]);
+
+
+  /** ---------------------------------------------------------
+   * Reload list after create/update
+   * --------------------------------------------------------- */
   async function refreshProjects() {
+
     setLoading(true);
     setError(null);
 
     try {
-      const list = isDemo ? await api.demoListProjects() : await api.listProjects();
+      const list = isDemo
+        ? await api.demoListProjects()
+        : await api.listProjects();
+
       setProjects(list);
+
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -114,21 +175,26 @@ export default function ProjectsPage() {
     }
   }
 
-  /**
-   * Open Create modal directly.
-   * Used when user is already ADMIN/DEMO, or after login redirect comes back here.
-   */
+
+  /** ---------------------------------------------------------
+   * Open Create modal directly
+   * --------------------------------------------------------- */
   function openCreateModalDirect() {
+
     setEditingProject(null);
     setCreateError(null);
+
     resetCreateForm();
+
     setCreateOpen(true);
   }
 
-  /**
-   * Open Edit modal directly and prefill existing data.
-   */
+
+  /** ---------------------------------------------------------
+   * Open Edit modal and prefill form
+   * --------------------------------------------------------- */
   function openEditModalDirect(p: ProjectDto) {
+
     setEditingProject(p);
 
     setSlug(p.slug ?? "");
@@ -143,15 +209,16 @@ export default function ProjectsPage() {
     setCreateOpen(true);
   }
 
-  /**
-   * After returning from login with a ?action=... query,
-   * automatically open the correct modal.
+
+  /** ---------------------------------------------------------
+   * Handle login redirect
    *
-   * Examples:
-   * - /projects?action=create
-   * - /projects?action=edit&slug=workout-app
-   */
+   * Example URLs:
+   * /projects?action=create
+   * /projects?action=edit&slug=workout-app
+   * --------------------------------------------------------- */
   useEffect(() => {
+
     if (loading) return;
     if (!isAdmin && !isDemo) return;
 
@@ -159,26 +226,31 @@ export default function ProjectsPage() {
     const slugFromQuery = searchParams.get("slug");
 
     if (action === "create") {
+
       openCreateModalDirect();
       setSearchParams({}, { replace: true });
+
       return;
     }
 
     if (action === "edit" && slugFromQuery) {
-      const target = projects.find((p) => p.slug === slugFromQuery);
+
+      const target = projects.find(p => p.slug === slugFromQuery);
+
       if (target) {
         openEditModalDirect(target);
         setSearchParams({}, { replace: true });
       }
     }
-  }, [loading, isAdmin, isDemo, projects, searchParams, setSearchParams]);
 
-  /**
-   * Public Create click:
-   * - ADMIN/DEMO -> open modal directly
-   * - none       -> ask Admin or Demo
-   */
+  }, [loading, isAdmin, isDemo, projects]);
+
+
+  /** ---------------------------------------------------------
+   * Create button click
+   * --------------------------------------------------------- */
   function onCreateClick() {
+
     if (isAdmin || isDemo) {
       openCreateModalDirect();
       return;
@@ -186,15 +258,16 @@ export default function ProjectsPage() {
 
     setPendingAction("create");
     setEditTarget(null);
+
     setChoiceOpen(true);
   }
 
-  /**
-   * Public Edit click:
-   * - ADMIN/DEMO -> open edit modal directly
-   * - none       -> ask Admin or Demo
-   */
+
+  /** ---------------------------------------------------------
+   * Edit button click
+   * --------------------------------------------------------- */
   function onEditClick(p: ProjectDto) {
+
     if (isAdmin || isDemo) {
       openEditModalDirect(p);
       return;
@@ -202,45 +275,52 @@ export default function ProjectsPage() {
 
     setPendingAction("edit");
     setEditTarget(p);
+
     setChoiceOpen(true);
   }
 
-  /**
-   * AccessChoiceModal -> Admin path
-   *
-   * Returns to this same page with intent encoded in query params,
-   * so after login the correct modal opens automatically.
-   */
+
+  /** ---------------------------------------------------------
+   * Admin login redirect
+   * --------------------------------------------------------- */
   function goAdminLogin() {
+
     let next = "/projects";
 
     if (pendingAction === "create") {
       next = "/projects?action=create";
-    } else if (pendingAction === "edit" && editTarget) {
+    }
+
+    else if (pendingAction === "edit" && editTarget) {
       next = `/projects?action=edit&slug=${encodeURIComponent(editTarget.slug)}`;
     }
 
     setChoiceOpen(false);
+
     navigate(`/admin/login?next=${encodeURIComponent(next)}`);
   }
 
-  /**
-   * AccessChoiceModal -> Demo path
-   *
-   * Same as admin: returns to this page, then opens the correct modal automatically.
-   */
+
+  /** ---------------------------------------------------------
+   * Demo login redirect
+   * --------------------------------------------------------- */
   function goDemoLogin() {
+
     let next = "/demo";
 
     if (pendingAction === "create") {
       next = "/demo?action=create";
-    } else if (pendingAction === "edit" && editTarget) {
+    }
+
+    else if (pendingAction === "edit" && editTarget) {
       next = `/demo?action=edit&slug=${encodeURIComponent(editTarget.slug)}`;
     }
 
     setChoiceOpen(false);
+
     navigate(`/demo/login?next=${encodeURIComponent(next)}`);
   }
+
 
   function closeCreateModal() {
     setCreateOpen(false);
@@ -258,13 +338,12 @@ export default function ProjectsPage() {
     setLiveUrl("");
   }
 
-  /**
-   * Submit Create/Edit.
-   *
-   * - ADMIN -> real endpoints
-   * - DEMO  -> sandbox endpoints
-   */
+
+  /** ---------------------------------------------------------
+   * Submit Create/Edit project
+   * --------------------------------------------------------- */
   async function onSubmitProject() {
+
     setCreateError(null);
 
     if (!slug.trim() || !name.trim()) {
@@ -273,8 +352,10 @@ export default function ProjectsPage() {
     }
 
     const payload: CreateProjectRequest = {
+
       slug: slug.trim(),
       name: name.trim(),
+
       summary: summary.trim() ? summary.trim() : null,
       description: description.trim() ? description.trim() : null,
       techStack: techStack.trim() ? techStack.trim() : null,
@@ -283,15 +364,19 @@ export default function ProjectsPage() {
     };
 
     try {
+
       setCreating(true);
 
       if (editingProject) {
+
         if (isDemo) {
           await api.demoUpdateProject(editingProject.id, payload);
         } else {
           await api.updateProject(editingProject.id, payload);
         }
+
       } else {
+
         if (isDemo) {
           await api.demoCreateProject(payload);
         } else {
@@ -301,13 +386,23 @@ export default function ProjectsPage() {
 
       closeCreateModal();
       resetCreateForm();
+
       await refreshProjects();
+
     } catch (e: any) {
+
       setCreateError(String(e?.message ?? e));
+
     } finally {
+
       setCreating(false);
     }
   }
+
+
+  /** ---------------------------------------------------------
+   * Render
+   * --------------------------------------------------------- */
 
   return (
     <>
@@ -326,7 +421,6 @@ export default function ProjectsPage() {
               color: "var(--text)",
               cursor: "pointer",
             }}
-            title="Create as Admin or Demo"
           >
             + Create Project
           </button>
@@ -334,58 +428,14 @@ export default function ProjectsPage() {
       />
 
       <div className="container">
+
         {loading && (
           <>
-            <p className="muted">Loading projects... First visit may take a moment.</p>
-
-            <div className="projectGrid">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="projectCard"
-                  style={{
-                    opacity: 0.65,
-                    pointerEvents: "none",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: 20,
-                      width: "60%",
-                      borderRadius: 8,
-                      background: "rgba(255,255,255,0.14)",
-                      marginBottom: 12,
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: 12,
-                      width: "100%",
-                      borderRadius: 8,
-                      background: "rgba(255,255,255,0.10)",
-                      marginBottom: 8,
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: 12,
-                      width: "72%",
-                      borderRadius: 8,
-                      background: "rgba(255,255,255,0.08)",
-                      marginBottom: 16,
-                    }}
-                  />
-                  <div
-                    style={{
-                      height: 34,
-                      width: 70,
-                      borderRadius: 10,
-                      background: "rgba(255,255,255,0.08)",
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
+            <p className="muted">
+              Loading projects...
+              {loadingTooLong &&
+                " Backend is waking up, this may take a little longer on first visit."}
+            </p>
           </>
         )}
 
@@ -393,18 +443,21 @@ export default function ProjectsPage() {
 
         {!loading && (
           <div className="projectGrid">
+
             {projects.map((p) => (
               <Link key={p.id} to={`/projects/${p.slug}`} className="projectCard">
+
                 <div className="projectTop">
                   <h3>{p.name}</h3>
-                  {p.techStack ? <span className="pill">{p.techStack}</span> : null}
+                  {p.techStack && <span className="pill">{p.techStack}</span>}
                 </div>
 
-                {p.summary ? <p className="projectSummary">{p.summary}</p> : null}
-              
+                {p.summary && (
+                  <p className="projectSummary">{p.summary}</p>
+                )}
 
-                {/* Edit is always visible in public view */}
                 <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+
                   <button
                     type="button"
                     onClick={(e) => {
@@ -423,6 +476,7 @@ export default function ProjectsPage() {
                   >
                     Edit
                   </button>
+
                 </div>
 
                 <div className="projectFooter">
@@ -430,15 +484,21 @@ export default function ProjectsPage() {
                     Created {new Date(p.createdAt).toLocaleDateString()}
                   </span>
                 </div>
+
               </Link>
             ))}
+
           </div>
         )}
 
-        {!loading && projects.length === 0 ? <p className="muted">No projects yet.</p> : null}
+        {!loading && projects.length === 0 && (
+          <p className="muted">No projects yet.</p>
+        )}
+
       </div>
 
-      {/* Access choice modal (Admin vs Demo) */}
+
+      {/* Access choice modal */}
       <AccessChoiceModal
         open={choiceOpen}
         onClose={() => {
@@ -451,201 +511,6 @@ export default function ProjectsPage() {
         title={pendingAction === "create" ? "Create a project?" : "Edit this project?"}
         message="Choose how you want to continue."
       />
-
-      {/* =========================
-          Create/Edit Project Modal
-         ========================= */}
-      {createOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={closeCreateModal}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(10, 10, 20, 0.85)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 9999,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="card"
-            style={{
-              width: "min(720px, 100%)",
-              padding: 20,
-              borderRadius: 18,
-              background: "rgba(25, 25, 35, 0.95)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <h2 className="h2" style={{ marginTop: 0 }}>
-                {editingProject ? "Edit Project" : "Create Project"}
-              </h2>
-
-              <button
-                type="button"
-                onClick={closeCreateModal}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "transparent",
-                  color: "var(--text)",
-                  cursor: "pointer",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {createError && <p style={{ color: "salmon" }}>{createError}</p>}
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <input
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="Slug (unique) e.g. workout-app"
-                style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.12)",
-                  color: "var(--text)",
-                }}
-              />
-
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Name e.g. Workout App"
-                style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.12)",
-                  color: "var(--text)",
-                }}
-              />
-
-              <input
-                value={techStack}
-                onChange={(e) => setTechStack(e.target.value)}
-                placeholder="Tech stack (optional) e.g. React, Spring Boot"
-                style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.12)",
-                  color: "var(--text)",
-                }}
-              />
-
-              <input
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                placeholder="Summary (optional)"
-                style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.12)",
-                  color: "var(--text)",
-                }}
-              />
-
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description (optional)"
-                rows={5}
-                style={{
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  background: "rgba(0,0,0,0.12)",
-                  color: "var(--text)",
-                }}
-              />
-
-              <div className="row" style={{ gap: 10 }}>
-                <input
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="Repo URL (optional)"
-                  style={{
-                    padding: 10,
-                    borderRadius: 10,
-                    border: "1px solid var(--border)",
-                    background: "rgba(0,0,0,0.12)",
-                    color: "var(--text)",
-                    flex: 1,
-                  }}
-                />
-                <input
-                  value={liveUrl}
-                  onChange={(e) => setLiveUrl(e.target.value)}
-                  placeholder="Live URL (optional)"
-                  style={{
-                    padding: 10,
-                    borderRadius: 10,
-                    border: "1px solid var(--border)",
-                    background: "rgba(0,0,0,0.12)",
-                    color: "var(--text)",
-                    flex: 1,
-                  }}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  onClick={closeCreateModal}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "transparent",
-                    color: "var(--text)",
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onSubmitProject}
-                  disabled={creating}
-                  style={{
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "rgba(255,255,255,0.10)",
-                    color: "var(--text)",
-                    cursor: creating ? "not-allowed" : "pointer",
-                    opacity: creating ? 0.7 : 1,
-                  }}
-                >
-                  {creating
-                    ? editingProject
-                      ? "Saving..."
-                      : "Creating..."
-                    : editingProject
-                    ? "Save Changes"
-                    : "Create Project"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
