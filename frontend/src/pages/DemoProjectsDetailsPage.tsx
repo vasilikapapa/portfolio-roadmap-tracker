@@ -523,6 +523,21 @@ export default function DemoProjectDetailsPage() {
                   + Create Update
                 </button>
 
+                   <button
+                  type="button"
+                  onClick={() => navigate(`/admin/projects/${data.project.slug}/planning`)}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "rgba(255,255,255,0.10)",
+                    color: "var(--text)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Planning Board
+                </button>
+
                 <button
                   type="button"
                   onClick={onDeleteProject}
