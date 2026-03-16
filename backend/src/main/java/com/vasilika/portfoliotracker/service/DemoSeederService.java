@@ -10,8 +10,11 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
 @Service
 public class DemoSeederService {
 
@@ -26,6 +29,7 @@ public class DemoSeederService {
         this.tasks = tasks;
         this.updates = updates;
     }
+
     @Transactional
     public void seedDemoData() {
 
@@ -52,6 +56,9 @@ public class DemoSeederService {
 
             Project savedDemoProject = projects.save(demoProject);
 
+            // Map admin task id -> copied demo task
+            Map<UUID, Task> demoTaskByAdminTaskId = new HashMap<>();
+
             // Copy tasks
             List<Task> adminTasks = tasks.findByProject_Id(admin.getId());
             for (Task t : adminTasks) {
@@ -66,7 +73,9 @@ public class DemoSeederService {
                 demoTask.setTargetVersion(t.getTargetVersion());
                 demoTask.setCreatedAt(Instant.now());
                 demoTask.setUpdatedAt(Instant.now());
-                tasks.save(demoTask);
+
+                Task savedDemoTask = tasks.save(demoTask);
+                demoTaskByAdminTaskId.put(t.getId(), savedDemoTask);
             }
 
             // Copy updates
@@ -78,6 +87,13 @@ public class DemoSeederService {
                 demoUpdate.setTitle(u.getTitle());
                 demoUpdate.setBody(u.getBody());
                 demoUpdate.setCreatedAt(Instant.now());
+
+                // Preserve task link by attaching the MATCHING DEMO task
+                if (u.getTask() != null) {
+                    Task matchingDemoTask = demoTaskByAdminTaskId.get(u.getTask().getId());
+                    demoUpdate.setTask(matchingDemoTask);
+                }
+
                 updates.save(demoUpdate);
             }
         }
