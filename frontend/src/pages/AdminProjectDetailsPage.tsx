@@ -87,6 +87,11 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
   );
 }
 
+type UpdateDraft = {
+  title: string;
+  body: string;
+};
+
 export default function AdminProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -116,6 +121,7 @@ export default function AdminProjectDetailsPage() {
   const [updateErrors, setUpdateErrors] = useState<{
     title?: string;
     body?: string;
+    drafts?: string;
   }>({});
 
   // Create/Edit Task form state
@@ -128,13 +134,17 @@ export default function AdminProjectDetailsPage() {
   const [creatingTask, setCreatingTask] = useState(false);
 
   // Create/Edit Update form state
-  // 
   // - uTaskId lets an update optionally reference a specific task
   // - empty string means "General project update"
   const [uTaskId, setUTaskId] = useState("");
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
+
+  // Create mode only: multiple drafts for the same selected task
+  const [updateDrafts, setUpdateDrafts] = useState<UpdateDraft[]>([
+    { title: "", body: "" },
+  ]);
 
   /**
    * Reset task modal state back to clean CREATE mode defaults.
@@ -161,6 +171,7 @@ export default function AdminProjectDetailsPage() {
     setUTaskId("");
     setUTitle("");
     setUBody("");
+    setUpdateDrafts([{ title: "", body: "" }]);
   }
 
   /**
@@ -303,7 +314,6 @@ export default function AdminProjectDetailsPage() {
   /**
    * Open update modal in EDIT mode
    *
-   * 
    * - preload related task so the user can keep/change/remove it
    */
   function openEditUpdateModal(update: UpdateDto) {
@@ -316,6 +326,29 @@ export default function AdminProjectDetailsPage() {
     setUBody(update.body ?? "");
 
     setUpdateModalOpen(true);
+  }
+
+  function addUpdateDraft() {
+    setUpdateDrafts((prev) => [...prev, { title: "", body: "" }]);
+  }
+
+  function removeUpdateDraft(index: number) {
+    setUpdateDrafts((prev) => {
+      if (prev.length === 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  function updateDraftField(
+    index: number,
+    field: keyof UpdateDraft,
+    value: string
+  ) {
+    setUpdateDrafts((prev) =>
+      prev.map((draft, i) =>
+        i === index ? { ...draft, [field]: value } : draft
+      )
+    );
   }
 
   /**
@@ -362,34 +395,76 @@ export default function AdminProjectDetailsPage() {
   /**
    * Create or update an update entry
    *
-   * 
-   * - taskId is optional
-   * - null means this is a general project update
+   * - edit mode: updates one existing update
+   * - create mode: allows multiple new updates for the same selected task
    */
   async function onSubmitUpdate() {
     if (!data) return;
 
-    const nextErrors: { title?: string; body?: string } = {};
-    if (!uTitle.trim()) nextErrors.title = "Update title is required.";
-    if (!uBody.trim()) nextErrors.body = "Update body is required.";
-
-    setUpdateErrors(nextErrors);
+    setUpdateErrors({});
     setUpdateServerError(null);
 
-    if (Object.keys(nextErrors).length > 0) return;
+    if (editingUpdate) {
+      const nextErrors: { title?: string; body?: string } = {};
+      if (!uTitle.trim()) nextErrors.title = "Update title is required.";
+      if (!uBody.trim()) nextErrors.body = "Update body is required.";
 
-    const payload: CreateUpdateRequest = {
-      taskId: uTaskId || null,
-      title: uTitle.trim(),
-      body: uBody.trim(),
-    };
+      setUpdateErrors(nextErrors);
+
+      if (Object.keys(nextErrors).length > 0) return;
+
+      const payload: CreateUpdateRequest = {
+        taskId: uTaskId || null,
+        title: uTitle.trim(),
+        body: uBody.trim(),
+      };
+
+      try {
+        setCreatingUpdate(true);
+        await api.updateUpdate(data.project.id, editingUpdate.id, payload);
+        closeUpdateModal();
+        await load();
+      } catch (e: any) {
+        setUpdateServerError(String(e?.message ?? e));
+      } finally {
+        setCreatingUpdate(false);
+      }
+
+      return;
+    }
+
+    const cleanedDrafts = updateDrafts
+      .map((draft) => ({
+        title: draft.title.trim(),
+        body: draft.body.trim(),
+      }))
+      .filter((draft) => draft.title || draft.body);
+
+    const nextErrors: { drafts?: string } = {};
+
+    if (cleanedDrafts.length === 0) {
+      nextErrors.drafts = "Add at least one update with a title and body.";
+    } else if (
+      cleanedDrafts.some((draft) => !draft.title || !draft.body)
+    ) {
+      nextErrors.drafts =
+        "Each update in the list must include both a title and a body.";
+    }
+
+    setUpdateErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) return;
 
     try {
       setCreatingUpdate(true);
 
-      if (editingUpdate) {
-        await api.updateUpdate(data.project.id, editingUpdate.id, payload);
-      } else {
+      for (const draft of cleanedDrafts) {
+        const payload: CreateUpdateRequest = {
+          taskId: uTaskId || null,
+          title: draft.title,
+          body: draft.body,
+        };
+
         await api.createUpdate(data.project.id, payload);
       }
 
@@ -501,7 +576,9 @@ export default function AdminProjectDetailsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate(`/admin/projects/${data.project.slug}/planning`)}
+                  onClick={() =>
+                    navigate(`/admin/projects/${data.project.slug}/planning`)
+                  }
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -596,7 +673,9 @@ export default function AdminProjectDetailsPage() {
                           </select>
                         </div>
 
-                        <div className="taskFooter">Updated {fmt(t.updatedAt)}</div>
+                        <div className="taskFooter">
+                          Updated {fmt(t.updatedAt)}
+                        </div>
 
                         <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
                           <button
@@ -816,7 +895,11 @@ export default function AdminProjectDetailsPage() {
                 }}
               >
                 <div
-                  style={{ display: "flex", justifyContent: "space-between", gap: 12 }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
                 >
                   <h2 className="h2" style={{ marginTop: 0 }}>
                     {editingTask ? "Edit Task" : "Create Task"}
@@ -839,7 +922,9 @@ export default function AdminProjectDetailsPage() {
                 </div>
 
                 {taskServerError && (
-                  <p style={{ color: "salmon", marginTop: 0 }}>{taskServerError}</p>
+                  <p style={{ color: "salmon", marginTop: 0 }}>
+                    {taskServerError}
+                  </p>
                 )}
 
                 <div style={{ display: "grid", gap: 10 }}>
@@ -850,7 +935,10 @@ export default function AdminProjectDetailsPage() {
                       setTTitle(v);
 
                       if (taskErrors.title && v.trim()) {
-                        setTaskErrors((prev) => ({ ...prev, title: undefined }));
+                        setTaskErrors((prev) => ({
+                          ...prev,
+                          title: undefined,
+                        }));
                       }
                     }}
                     placeholder="Title"
@@ -906,7 +994,9 @@ export default function AdminProjectDetailsPage() {
 
                     <select
                       value={tPriority}
-                      onChange={(e) => setTPriority(e.target.value as TaskPriority)}
+                      onChange={(e) =>
+                        setTPriority(e.target.value as TaskPriority)
+                      }
                       style={{ padding: 10, borderRadius: 10 }}
                     >
                       <option value="LOW">LOW</option>
@@ -928,7 +1018,13 @@ export default function AdminProjectDetailsPage() {
                     }}
                   />
 
-                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      justifyContent: "flex-end",
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={closeTaskModal}
@@ -996,16 +1092,22 @@ export default function AdminProjectDetailsPage() {
                 onClick={(e) => e.stopPropagation()}
                 className="card"
                 style={{
-                  width: "min(720px, 100%)",
+                  width: "min(820px, 100%)",
                   padding: 16,
                   borderRadius: 16,
+                  maxHeight: "90vh",
+                  overflowY: "auto",
                 }}
               >
                 <div
-                  style={{ display: "flex", justifyContent: "space-between", gap: 12 }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 12,
+                  }}
                 >
                   <h2 className="h2" style={{ marginTop: 0 }}>
-                    {editingUpdate ? "Edit Update" : "Create Update"}
+                    {editingUpdate ? "Edit Update" : "Create Updates"}
                   </h2>
 
                   <button
@@ -1030,8 +1132,8 @@ export default function AdminProjectDetailsPage() {
                   </p>
                 )}
 
-                <div style={{ display: "grid", gap: 10 }}>
-                  {/* Optional task selection for linking update to roadmap work */}
+                <div style={{ display: "grid", gap: 12 }}>
+                  {/* Optional task selection for linking update(s) to roadmap work */}
                   <select
                     value={uTaskId}
                     onChange={(e) => setUTaskId(e.target.value)}
@@ -1039,7 +1141,6 @@ export default function AdminProjectDetailsPage() {
                       padding: 10,
                       borderRadius: 10,
                       border: "1px solid var(--border)",
-                      
                     }}
                   >
                     <option value="">General project update</option>
@@ -1051,60 +1152,198 @@ export default function AdminProjectDetailsPage() {
                     ))}
                   </select>
 
-                  <input
-                    value={uTitle}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setUTitle(v);
+                  {editingUpdate ? (
+                    <>
+                      <input
+                        value={uTitle}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setUTitle(v);
 
-                      if (updateErrors.title && v.trim()) {
-                        setUpdateErrors((prev) => ({ ...prev, title: undefined }));
-                      }
-                    }}
-                    placeholder="Title"
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "rgba(0,0,0,0.12)",
-                      color: "var(--text)",
-                    }}
-                  />
+                          if (updateErrors.title && v.trim()) {
+                            setUpdateErrors((prev) => ({
+                              ...prev,
+                              title: undefined,
+                            }));
+                          }
+                        }}
+                        placeholder="Title"
+                        style={{
+                          padding: 10,
+                          borderRadius: 10,
+                          border: "1px solid var(--border)",
+                          background: "rgba(0,0,0,0.12)",
+                          color: "var(--text)",
+                        }}
+                      />
 
-                  {updateErrors.title && (
-                    <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
-                      {updateErrors.title}
-                    </div>
+                      {updateErrors.title && (
+                        <div
+                          style={{ color: "salmon", fontSize: 13, marginTop: -6 }}
+                        >
+                          {updateErrors.title}
+                        </div>
+                      )}
+
+                      <textarea
+                        value={uBody}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setUBody(v);
+
+                          if (updateErrors.body && v.trim()) {
+                            setUpdateErrors((prev) => ({
+                              ...prev,
+                              body: undefined,
+                            }));
+                          }
+                        }}
+                        placeholder="Body"
+                        rows={6}
+                        style={{
+                          padding: 10,
+                          borderRadius: 10,
+                          border: "1px solid var(--border)",
+                          background: "rgba(0,0,0,0.12)",
+                          color: "var(--text)",
+                        }}
+                      />
+
+                      {updateErrors.body && (
+                        <div
+                          style={{ color: "salmon", fontSize: 13, marginTop: -6 }}
+                        >
+                          {updateErrors.body}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="muted2" style={{ fontSize: 13 }}>
+                        You can add multiple updates below. All of them will be
+                        created for the selected task in one submission.
+                      </div>
+
+                      {updateDrafts.map((draft, index) => (
+                        <div
+                          key={index}
+                          className="card-soft"
+                          style={{
+                            padding: 14,
+                            borderRadius: 14,
+                            display: "grid",
+                            gap: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              alignItems: "center",
+                            }}
+                          >
+                            <strong>Update {index + 1}</strong>
+
+                            <button
+                              type="button"
+                              onClick={() => removeUpdateDraft(index)}
+                              disabled={updateDrafts.length === 1}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: 10,
+                                border: "1px solid var(--border)",
+                                background:
+                                  updateDrafts.length === 1
+                                    ? "rgba(255,255,255,0.06)"
+                                    : "rgba(255, 80, 80, 0.12)",
+                                color: "var(--text)",
+                                cursor:
+                                  updateDrafts.length === 1
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: updateDrafts.length === 1 ? 0.7 : 1,
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <input
+                            value={draft.title}
+                            onChange={(e) => {
+                              updateDraftField(index, "title", e.target.value);
+                              if (updateErrors.drafts && e.target.value.trim()) {
+                                setUpdateErrors((prev) => ({
+                                  ...prev,
+                                  drafts: undefined,
+                                }));
+                              }
+                            }}
+                            placeholder="Title"
+                            style={{
+                              padding: 10,
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(0,0,0,0.12)",
+                              color: "var(--text)",
+                            }}
+                          />
+
+                          <textarea
+                            value={draft.body}
+                            onChange={(e) => {
+                              updateDraftField(index, "body", e.target.value);
+                              if (updateErrors.drafts && e.target.value.trim()) {
+                                setUpdateErrors((prev) => ({
+                                  ...prev,
+                                  drafts: undefined,
+                                }));
+                              }
+                            }}
+                            placeholder="Body"
+                            rows={5}
+                            style={{
+                              padding: 10,
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(0,0,0,0.12)",
+                              color: "var(--text)",
+                            }}
+                          />
+                        </div>
+                      ))}
+
+                      {updateErrors.drafts && (
+                        <div
+                          style={{ color: "salmon", fontSize: 13, marginTop: -4 }}
+                        >
+                          {updateErrors.drafts}
+                        </div>
+                      )}
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={addUpdateDraft}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 12,
+                            border: "1px solid var(--border)",
+                            background: "rgba(255,255,255,0.08)",
+                            color: "var(--text)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          + Add Another Update
+                        </button>
+                      </div>
+                    </>
                   )}
 
-                  <textarea
-                    value={uBody}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setUBody(v);
-
-                      if (updateErrors.body && v.trim()) {
-                        setUpdateErrors((prev) => ({ ...prev, body: undefined }));
-                      }
-                    }}
-                    placeholder="Body"
-                    rows={6}
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "rgba(0,0,0,0.12)",
-                      color: "var(--text)",
-                    }}
-                  />
-
-                  {updateErrors.body && (
-                    <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
-                      {updateErrors.body}
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <div
+                    style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}
+                  >
                     <button
                       type="button"
                       onClick={closeUpdateModal}
@@ -1140,7 +1379,7 @@ export default function AdminProjectDetailsPage() {
                           : "Creating..."
                         : editingUpdate
                         ? "Save Update"
-                        : "Create Update"}
+                        : `Create ${updateDrafts.length > 1 ? "Updates" : "Update"}`}
                     </button>
                   </div>
                 </div>
