@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import PageHeader from "../components/PageHeader/PageHeader";
 import { api, type ProjectDetailsDto, type TaskDto } from "../lib/api";
 import "../styles/projectDetails.css";
+import { useAuth } from "../context/AuthContext";
 
 /**
  * Planning board item saved in localStorage.
@@ -80,6 +81,7 @@ function moveItem<T>(arr: T[], from: number, to: number): T[] {
  */
 export default function PlanningBoardPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { isDemo } = useAuth();
 
   const [data, setData] = useState<ProjectDetailsDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,10 +155,8 @@ export default function PlanningBoardPage() {
     const usedIds = new Set(planningItems.map((item) => item.taskId));
 
     return (data?.tasks ?? []).filter(
-    (task) =>
-      task.status !== "DONE" && // hide completed tasks
-      !usedIds.has(task.id)
-  );
+      (task) => task.status !== "DONE" && !usedIds.has(task.id)
+    );
   }, [data, planningItems]);
 
   /**
@@ -267,13 +267,16 @@ export default function PlanningBoardPage() {
                 <button
                   type="button"
                   onClick={clearPlanningBoard}
+                  disabled={isDemo}
+                  title={isDemo ? "Disabled in demo mode" : ""}
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
                     border: "1px solid var(--border)",
                     background: "rgba(255, 80, 80, 0.10)",
                     color: "var(--text)",
-                    cursor: "pointer",
+                    cursor: isDemo ? "not-allowed" : "pointer",
+                    opacity: isDemo ? 0.6 : 1,
                   }}
                 >
                   Clear Board
@@ -281,6 +284,23 @@ export default function PlanningBoardPage() {
               </div>
             }
           />
+
+          {isDemo && (
+            <div
+              className="card"
+              style={{
+                padding: 14,
+                marginTop: 16,
+                border: "1px solid var(--border)",
+                background: "rgba(255,255,255,0.05)",
+              }}
+            >
+              <p style={{ margin: 0 }}>
+                Demo mode: This planning board is view-only. Editing is disabled
+                to protect the real admin data.
+              </p>
+            </div>
+          )}
 
           <div className="spacer" />
 
@@ -303,6 +323,7 @@ export default function PlanningBoardPage() {
               <select
                 value={selectedTaskId}
                 onChange={(e) => setSelectedTaskId(e.target.value)}
+                disabled={isDemo}
                 style={{
                   flex: 1,
                   minWidth: 260,
@@ -311,6 +332,8 @@ export default function PlanningBoardPage() {
                   border: "1px solid var(--border)",
                   background: "#111827",
                   color: "#ffffff",
+                  cursor: isDemo ? "not-allowed" : "pointer",
+                  opacity: isDemo ? 0.7 : 1,
                 }}
               >
                 <option value="">Select a roadmap task</option>
@@ -325,22 +348,28 @@ export default function PlanningBoardPage() {
               <button
                 type="button"
                 onClick={addTaskToPlanningBoard}
-                disabled={!selectedTaskId}
+                disabled={isDemo || !selectedTaskId}
+                title={isDemo ? "Disabled in demo mode" : ""}
                 style={{
                   padding: "10px 12px",
                   borderRadius: 12,
                   border: "1px solid var(--border)",
                   background: "rgba(255,255,255,0.10)",
                   color: "var(--text)",
-                  cursor: selectedTaskId ? "pointer" : "not-allowed",
-                  opacity: selectedTaskId ? 1 : 0.7,
+                  cursor: isDemo || !selectedTaskId ? "not-allowed" : "pointer",
+                  opacity: isDemo || !selectedTaskId ? 0.7 : 1,
                 }}
               >
                 + Add to Plan
               </button>
             </div>
 
-            {availableTasks.length === 0 ? (
+            {isDemo ? (
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Demo users can view the planning board, but editing is disabled to
+                protect the real admin data.
+              </p>
+            ) : availableTasks.length === 0 ? (
               <p className="muted" style={{ marginBottom: 0 }}>
                 All project tasks are already in the planning queue.
               </p>
@@ -410,13 +439,16 @@ export default function PlanningBoardPage() {
                       <button
                         type="button"
                         onClick={() => setCurrentTask(item.taskId)}
+                        disabled={isDemo}
+                        title={isDemo ? "Disabled in demo mode" : ""}
                         style={{
                           padding: "8px 10px",
                           borderRadius: 10,
                           border: "1px solid var(--border)",
                           background: "rgba(255,255,255,0.08)",
                           color: "var(--text)",
-                          cursor: "pointer",
+                          cursor: isDemo ? "not-allowed" : "pointer",
+                          opacity: isDemo ? 0.7 : 1,
                         }}
                       >
                         Mark Current
@@ -425,15 +457,16 @@ export default function PlanningBoardPage() {
                       <button
                         type="button"
                         onClick={() => moveUp(index)}
-                        disabled={index === 0}
+                        disabled={isDemo || index === 0}
+                        title={isDemo ? "Disabled in demo mode" : ""}
                         style={{
                           padding: "8px 10px",
                           borderRadius: 10,
                           border: "1px solid var(--border)",
                           background: "rgba(255,255,255,0.08)",
                           color: "var(--text)",
-                          cursor: index === 0 ? "not-allowed" : "pointer",
-                          opacity: index === 0 ? 0.7 : 1,
+                          cursor: isDemo || index === 0 ? "not-allowed" : "pointer",
+                          opacity: isDemo || index === 0 ? 0.7 : 1,
                         }}
                       >
                         Move Up
@@ -442,7 +475,8 @@ export default function PlanningBoardPage() {
                       <button
                         type="button"
                         onClick={() => moveDown(index)}
-                        disabled={index === plannedTasks.length - 1}
+                        disabled={isDemo || index === plannedTasks.length - 1}
+                        title={isDemo ? "Disabled in demo mode" : ""}
                         style={{
                           padding: "8px 10px",
                           borderRadius: 10,
@@ -450,10 +484,11 @@ export default function PlanningBoardPage() {
                           background: "rgba(255,255,255,0.08)",
                           color: "var(--text)",
                           cursor:
-                            index === plannedTasks.length - 1
+                            isDemo || index === plannedTasks.length - 1
                               ? "not-allowed"
                               : "pointer",
-                          opacity: index === plannedTasks.length - 1 ? 0.7 : 1,
+                          opacity:
+                            isDemo || index === plannedTasks.length - 1 ? 0.7 : 1,
                         }}
                       >
                         Move Down
@@ -462,13 +497,16 @@ export default function PlanningBoardPage() {
                       <button
                         type="button"
                         onClick={() => removePlanningItem(item.taskId)}
+                        disabled={isDemo}
+                        title={isDemo ? "Disabled in demo mode" : ""}
                         style={{
                           padding: "8px 10px",
                           borderRadius: 10,
                           border: "1px solid var(--border)",
                           background: "rgba(255, 80, 80, 0.12)",
                           color: "var(--text)",
-                          cursor: "pointer",
+                          cursor: isDemo ? "not-allowed" : "pointer",
+                          opacity: isDemo ? 0.7 : 1,
                         }}
                       >
                         Remove
