@@ -86,6 +86,11 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
   );
 }
 
+type UpdateDraft = {
+  title: string;
+  body: string;
+};
+
 /**
  * DemoProjectDetailsPage
  *
@@ -119,6 +124,7 @@ export default function DemoProjectDetailsPage() {
   const [updateErrors, setUpdateErrors] = useState<{
     title?: string;
     body?: string;
+    drafts?: string;
   }>({});
 
   // Editing state
@@ -141,13 +147,17 @@ export default function DemoProjectDetailsPage() {
   const [creatingTask, setCreatingTask] = useState(false);
 
   // Update form state
-  // 
   // - uTaskId lets demo updates optionally point to a roadmap task
   // - empty string means general project update
   const [uTaskId, setUTaskId] = useState("");
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
+
+  // Create mode only: multiple drafts for the same selected task
+  const [updateDrafts, setUpdateDrafts] = useState<UpdateDraft[]>([
+    { title: "", body: "" },
+  ]);
 
   /**
    * Reset task modal state for fresh create/edit sessions.
@@ -174,6 +184,7 @@ export default function DemoProjectDetailsPage() {
     setUTaskId("");
     setUTitle("");
     setUBody("");
+    setUpdateDrafts([{ title: "", body: "" }]);
   }
 
   /**
@@ -330,7 +341,6 @@ export default function DemoProjectDetailsPage() {
   /**
    * Open update modal in EDIT mode and prefill fields.
    *
-   * 
    * - preload related task if update is linked to one
    */
   function openEditUpdateModal(update: UpdateDto) {
@@ -343,6 +353,29 @@ export default function DemoProjectDetailsPage() {
     setUBody(update.body ?? "");
 
     setUpdateModalOpen(true);
+  }
+
+  function addUpdateDraft() {
+    setUpdateDrafts((prev) => [...prev, { title: "", body: "" }]);
+  }
+
+  function removeUpdateDraft(index: number) {
+    setUpdateDrafts((prev) => {
+      if (prev.length === 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  function updateDraftField(
+    index: number,
+    field: keyof UpdateDraft,
+    value: string
+  ) {
+    setUpdateDrafts((prev) =>
+      prev.map((draft, i) =>
+        i === index ? { ...draft, [field]: value } : draft
+      )
+    );
   }
 
   /**
@@ -389,33 +422,74 @@ export default function DemoProjectDetailsPage() {
   /**
    * Create or update a demo update entry.
    *
-   * - taskId is optional
-   * - null means general project update
+   * - edit mode: updates one existing update
+   * - create mode: allows multiple new updates for the same selected task
    */
   async function onSubmitUpdate() {
     if (!data) return;
 
-    const nextErrors: { title?: string; body?: string } = {};
-    if (!uTitle.trim()) nextErrors.title = "Update title is required.";
-    if (!uBody.trim()) nextErrors.body = "Update body is required.";
-
-    setUpdateErrors(nextErrors);
+    setUpdateErrors({});
     setUpdateServerError(null);
 
-    if (Object.keys(nextErrors).length > 0) return;
+    if (editingUpdate) {
+      const nextErrors: { title?: string; body?: string } = {};
+      if (!uTitle.trim()) nextErrors.title = "Update title is required.";
+      if (!uBody.trim()) nextErrors.body = "Update body is required.";
 
-    const payload: CreateUpdateRequest = {
-      taskId: uTaskId || null,
-      title: uTitle.trim(),
-      body: uBody.trim(),
-    };
+      setUpdateErrors(nextErrors);
+
+      if (Object.keys(nextErrors).length > 0) return;
+
+      const payload: CreateUpdateRequest = {
+        taskId: uTaskId || null,
+        title: uTitle.trim(),
+        body: uBody.trim(),
+      };
+
+      try {
+        setCreatingUpdate(true);
+        await api.demoUpdateUpdate(data.project.id, editingUpdate.id, payload);
+        closeUpdateModal();
+        await load();
+      } catch (e: any) {
+        setUpdateServerError(String(e?.message ?? e));
+      } finally {
+        setCreatingUpdate(false);
+      }
+
+      return;
+    }
+
+    const cleanedDrafts = updateDrafts
+      .map((draft) => ({
+        title: draft.title.trim(),
+        body: draft.body.trim(),
+      }))
+      .filter((draft) => draft.title || draft.body);
+
+    const nextErrors: { drafts?: string } = {};
+
+    if (cleanedDrafts.length === 0) {
+      nextErrors.drafts = "Add at least one update with a title and body.";
+    } else if (cleanedDrafts.some((draft) => !draft.title || !draft.body)) {
+      nextErrors.drafts =
+        "Each update in the list must include both a title and a body.";
+    }
+
+    setUpdateErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) return;
 
     try {
       setCreatingUpdate(true);
 
-      if (editingUpdate) {
-        await api.demoUpdateUpdate(data.project.id, editingUpdate.id, payload);
-      } else {
+      for (const draft of cleanedDrafts) {
+        const payload: CreateUpdateRequest = {
+          taskId: uTaskId || null,
+          title: draft.title,
+          body: draft.body,
+        };
+
         await api.demoCreateUpdate(data.project.id, payload);
       }
 
@@ -523,9 +597,11 @@ export default function DemoProjectDetailsPage() {
                   + Create Update
                 </button>
 
-                   <button
+                <button
                   type="button"
-                  onClick={() => navigate(`/admin/projects/${data.project.slug}/planning`)}
+                  onClick={() =>
+                    navigate(`/admin/projects/${data.project.slug}/planning`)
+                  }
                   style={{
                     padding: "10px 12px",
                     borderRadius: 12,
@@ -680,9 +756,6 @@ export default function DemoProjectDetailsPage() {
               <p className="muted">No updates yet.</p>
             ) : (
               <div className="updates-groups">
-                {/* =========================
-                    General project updates
-                   ========================= */}
                 {updatesGrouped.general?.length ? (
                   <section className="update-group">
                     <div className="update-group-header">
@@ -739,9 +812,6 @@ export default function DemoProjectDetailsPage() {
                   </section>
                 ) : null}
 
-                {/* =========================
-                    Task-specific update groups
-                   ========================= */}
                 {groupedTaskIds.map((taskId) => {
                   const task = taskLookup.get(taskId);
                   const updates = updatesGrouped[taskId] ?? [];
@@ -814,9 +884,6 @@ export default function DemoProjectDetailsPage() {
             )}
           </section>
 
-          {/* =========================
-              Create/Edit Task Modal
-             ========================= */}
           {taskModalOpen && (
             <div
               role="dialog"
@@ -998,9 +1065,6 @@ export default function DemoProjectDetailsPage() {
             </div>
           )}
 
-          {/* =========================
-              Create/Edit Update Modal
-             ========================= */}
           {updateModalOpen && (
             <div
               role="dialog"
@@ -1022,14 +1086,16 @@ export default function DemoProjectDetailsPage() {
                 onClick={(e) => e.stopPropagation()}
                 className="card"
                 style={{
-                  width: "min(720px, 100%)",
+                  width: "min(820px, 100%)",
                   padding: 16,
                   borderRadius: 16,
+                  maxHeight: "90vh",
+                  overflowY: "auto",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <h2 className="h2" style={{ marginTop: 0 }}>
-                    {editingUpdate ? "Edit Update" : "Create Update"}
+                    {editingUpdate ? "Edit Update" : "Create Updates"}
                   </h2>
 
                   <button
@@ -1052,8 +1118,7 @@ export default function DemoProjectDetailsPage() {
                   <p style={{ color: "salmon", marginTop: 0 }}>{updateServerError}</p>
                 )}
 
-                <div style={{ display: "grid", gap: 10 }}>
-                  {/* Optional task selection for linking update to roadmap work */}
+                <div style={{ display: "grid", gap: 12 }}>
                   <select
                     value={uTaskId}
                     onChange={(e) => setUTaskId(e.target.value)}
@@ -1061,7 +1126,6 @@ export default function DemoProjectDetailsPage() {
                       padding: 10,
                       borderRadius: 10,
                       border: "1px solid var(--border)",
-                     
                     }}
                   >
                     <option value="">General project update</option>
@@ -1073,57 +1137,187 @@ export default function DemoProjectDetailsPage() {
                     ))}
                   </select>
 
-                  <input
-                    value={uTitle}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setUTitle(v);
+                  {editingUpdate ? (
+                    <>
+                      <input
+                        value={uTitle}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setUTitle(v);
 
-                      if (updateErrors.title && v.trim()) {
-                        setUpdateErrors((prev) => ({ ...prev, title: undefined }));
-                      }
-                    }}
-                    placeholder="Title"
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "rgba(0,0,0,0.12)",
-                      color: "var(--text)",
-                    }}
-                  />
+                          if (updateErrors.title && v.trim()) {
+                            setUpdateErrors((prev) => ({
+                              ...prev,
+                              title: undefined,
+                            }));
+                          }
+                        }}
+                        placeholder="Title"
+                        style={{
+                          padding: 10,
+                          borderRadius: 10,
+                          border: "1px solid var(--border)",
+                          background: "rgba(0,0,0,0.12)",
+                          color: "var(--text)",
+                        }}
+                      />
 
-                  {updateErrors.title && (
-                    <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
-                      {updateErrors.title}
-                    </div>
-                  )}
+                      {updateErrors.title && (
+                        <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
+                          {updateErrors.title}
+                        </div>
+                      )}
 
-                  <textarea
-                    value={uBody}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setUBody(v);
+                      <textarea
+                        value={uBody}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setUBody(v);
 
-                      if (updateErrors.body && v.trim()) {
-                        setUpdateErrors((prev) => ({ ...prev, body: undefined }));
-                      }
-                    }}
-                    placeholder="Body"
-                    rows={6}
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      border: "1px solid var(--border)",
-                      background: "rgba(0,0,0,0.12)",
-                      color: "var(--text)",
-                    }}
-                  />
+                          if (updateErrors.body && v.trim()) {
+                            setUpdateErrors((prev) => ({
+                              ...prev,
+                              body: undefined,
+                            }));
+                          }
+                        }}
+                        placeholder="Body"
+                        rows={6}
+                        style={{
+                          padding: 10,
+                          borderRadius: 10,
+                          border: "1px solid var(--border)",
+                          background: "rgba(0,0,0,0.12)",
+                          color: "var(--text)",
+                        }}
+                      />
 
-                  {updateErrors.body && (
-                    <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
-                      {updateErrors.body}
-                    </div>
+                      {updateErrors.body && (
+                        <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
+                          {updateErrors.body}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="muted2" style={{ fontSize: 13 }}>
+                        You can add multiple updates below. All of them will be
+                        created for the selected task in one submission.
+                      </div>
+
+                      {updateDrafts.map((draft, index) => (
+                        <div
+                          key={index}
+                          className="card-soft"
+                          style={{
+                            padding: 14,
+                            borderRadius: 14,
+                            display: "grid",
+                            gap: 10,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 10,
+                              alignItems: "center",
+                            }}
+                          >
+                            <strong>Update {index + 1}</strong>
+
+                            <button
+                              type="button"
+                              onClick={() => removeUpdateDraft(index)}
+                              disabled={updateDrafts.length === 1}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: 10,
+                                border: "1px solid var(--border)",
+                                background:
+                                  updateDrafts.length === 1
+                                    ? "rgba(255,255,255,0.06)"
+                                    : "rgba(255, 80, 80, 0.12)",
+                                color: "var(--text)",
+                                cursor:
+                                  updateDrafts.length === 1
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity: updateDrafts.length === 1 ? 0.7 : 1,
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <input
+                            value={draft.title}
+                            onChange={(e) => {
+                              updateDraftField(index, "title", e.target.value);
+                              if (updateErrors.drafts && e.target.value.trim()) {
+                                setUpdateErrors((prev) => ({
+                                  ...prev,
+                                  drafts: undefined,
+                                }));
+                              }
+                            }}
+                            placeholder="Title"
+                            style={{
+                              padding: 10,
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(0,0,0,0.12)",
+                              color: "var(--text)",
+                            }}
+                          />
+
+                          <textarea
+                            value={draft.body}
+                            onChange={(e) => {
+                              updateDraftField(index, "body", e.target.value);
+                              if (updateErrors.drafts && e.target.value.trim()) {
+                                setUpdateErrors((prev) => ({
+                                  ...prev,
+                                  drafts: undefined,
+                                }));
+                              }
+                            }}
+                            placeholder="Body"
+                            rows={5}
+                            style={{
+                              padding: 10,
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "rgba(0,0,0,0.12)",
+                              color: "var(--text)",
+                            }}
+                          />
+                        </div>
+                      ))}
+
+                      {updateErrors.drafts && (
+                        <div style={{ color: "salmon", fontSize: 13, marginTop: -4 }}>
+                          {updateErrors.drafts}
+                        </div>
+                      )}
+
+                      <div>
+                        <button
+                          type="button"
+                          onClick={addUpdateDraft}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 12,
+                            border: "1px solid var(--border)",
+                            background: "rgba(255,255,255,0.08)",
+                            color: "var(--text)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          + Add Another Update
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
@@ -1162,7 +1356,7 @@ export default function DemoProjectDetailsPage() {
                           : "Creating..."
                         : editingUpdate
                         ? "Save Update"
-                        : "Create Update"}
+                        : `Create ${updateDrafts.length > 1 ? "Updates" : "Update"}`}
                     </button>
                   </div>
                 </div>
