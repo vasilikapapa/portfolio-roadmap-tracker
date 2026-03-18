@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import PageHeader from "../components/PageHeader/PageHeader";
@@ -146,6 +146,12 @@ export default function AdminProjectDetailsPage() {
     { title: "", body: "" },
   ]);
 
+  // Update group expand/collapse state
+  const [expandedUpdateGroups, setExpandedUpdateGroups] = useState<Set<string>>(
+    new Set(["general"])
+  );
+  const updateGroupRefs = useRef<Record<string, HTMLElement | null>>({});
+
   /**
    * Reset task modal state back to clean CREATE mode defaults.
    */
@@ -276,6 +282,33 @@ export default function AdminProjectDetailsPage() {
   const groupedTaskIds = useMemo(() => {
     return Object.keys(updatesGrouped).filter((key) => key !== "general");
   }, [updatesGrouped]);
+
+  function toggleUpdateGroup(groupKey: string) {
+    setExpandedUpdateGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }
+
+  function openTaskUpdates(taskId: string) {
+    setExpandedUpdateGroups((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
+
+    requestAnimationFrame(() => {
+      updateGroupRefs.current[taskId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
 
   /**
    * Open task modal in CREATE mode
@@ -574,6 +607,7 @@ export default function AdminProjectDetailsPage() {
                 >
                   + Create Update
                 </button>
+
                 <button
                   type="button"
                   onClick={() =>
@@ -590,6 +624,7 @@ export default function AdminProjectDetailsPage() {
                 >
                   Planning Board
                 </button>
+
                 <button
                   type="button"
                   onClick={onDeleteProject}
@@ -677,7 +712,24 @@ export default function AdminProjectDetailsPage() {
                           Updated {fmt(t.updatedAt)}
                         </div>
 
-                        <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          {t.status === "DONE" && updatesGrouped[t.id]?.length ? (
+                            <button
+                              type="button"
+                              onClick={() => openTaskUpdates(t.id)}
+                              style={{
+                                padding: "8px 10px",
+                                borderRadius: 10,
+                                border: "1px solid var(--border)",
+                                background: "rgba(255,255,255,0.08)",
+                                color: "var(--text)",
+                                cursor: "pointer",
+                              }}
+                            >
+                              See Updates
+                            </button>
+                          ) : null}
+
                           <button
                             type="button"
                             onClick={() => openEditTaskModal(t)}
@@ -731,89 +783,35 @@ export default function AdminProjectDetailsPage() {
               <p className="muted">No updates yet.</p>
             ) : (
               <div className="updates-groups">
-                {/* =========================
-                    General project updates
-                   ========================= */}
                 {updatesGrouped.general?.length ? (
-                  <section className="update-group">
-                    <div className="update-group-header">
-                      <h3>General Project Updates</h3>
-                      <span>{updatesGrouped.general.length}</span>
-                    </div>
-
-                    <div className="updates-list">
-                      {updatesGrouped.general.map((u) => (
-                        <article key={u.id} className="update-card">
-                          <div className="update-card-top">
-                            <div>
-                              <h4>{u.title}</h4>
-                              <p className="update-meta">{fmt(u.createdAt)}</p>
-                            </div>
-
-                            <div className="update-actions">
-                              <button
-                                type="button"
-                                onClick={() => openEditUpdateModal(u)}
-                                style={{
-                                  padding: "8px 10px",
-                                  borderRadius: 10,
-                                  border: "1px solid var(--border)",
-                                  background: "rgba(255,255,255,0.08)",
-                                  color: "var(--text)",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Edit Update
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => onDeleteUpdate(u.id)}
-                                style={{
-                                  padding: "8px 10px",
-                                  borderRadius: 10,
-                                  border: "1px solid var(--border)",
-                                  background: "rgba(255, 80, 80, 0.12)",
-                                  color: "var(--text)",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Delete Update
-                              </button>
-                            </div>
-                          </div>
-
-                          <p>{u.body}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                {/* =========================
-                    Task-specific update groups
-                   ========================= */}
-                {groupedTaskIds.map((taskId) => {
-                  const task = taskLookup.get(taskId);
-                  const updates = updatesGrouped[taskId] ?? [];
-
-                  return (
-                    <section key={taskId} className="update-group">
-                      <div className="update-group-header">
-                        <div>
-                          <h3>{task?.title ?? "Related Task"}</h3>
-                          {task?.targetVersion ? (
-                            <p className="update-group-subtitle">
-                              Target version: {task.targetVersion}
-                            </p>
-                          ) : null}
-                        </div>
-
-                        <span>{updates.length}</span>
+                  <section
+                    className="update-group"
+                    ref={(el) => {
+                      updateGroupRefs.current.general = el;
+                    }}
+                  >
+                    <div
+                      className="update-group-header"
+                      onClick={() => toggleUpdateGroup("general")}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <div>
+                        <h3>General Project Updates</h3>
+                        <p className="update-group-subtitle">
+                          {expandedUpdateGroups.has("general")
+                            ? "Hide full history"
+                            : "Click to view history"}
+                        </p>
                       </div>
+                      <span>
+                        {updatesGrouped.general.length}{" "}
+                        {expandedUpdateGroups.has("general") ? "−" : "+"}
+                      </span>
+                    </div>
 
+                    {expandedUpdateGroups.has("general") && (
                       <div className="updates-list">
-                        {updates.map((u) => (
+                        {updatesGrouped.general.map((u) => (
                           <article key={u.id} className="update-card">
                             <div className="update-card-top">
                               <div>
@@ -858,6 +856,92 @@ export default function AdminProjectDetailsPage() {
                           </article>
                         ))}
                       </div>
+                    )}
+                  </section>
+                ) : null}
+
+                {groupedTaskIds.map((taskId) => {
+                  const task = taskLookup.get(taskId);
+                  const updates = updatesGrouped[taskId] ?? [];
+                  const isExpanded = expandedUpdateGroups.has(taskId);
+
+                  return (
+                    <section
+                      key={taskId}
+                      className="update-group"
+                      ref={(el) => {
+                        updateGroupRefs.current[taskId] = el;
+                      }}
+                    >
+                      <div
+                        className="update-group-header"
+                        onClick={() => toggleUpdateGroup(taskId)}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <div>
+                          <h3>{task?.title ?? "Related Task"}</h3>
+                          <p className="update-group-subtitle">
+                            {task?.targetVersion
+                              ? `Target version: ${task.targetVersion}`
+                              : "Task update history"}
+                            {" · "}
+                            {isExpanded ? "Hide details" : "Click to view updates"}
+                          </p>
+                        </div>
+
+                        <span>
+                          {updates.length} {isExpanded ? "−" : "+"}
+                        </span>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="updates-list">
+                          {updates.map((u) => (
+                            <article key={u.id} className="update-card">
+                              <div className="update-card-top">
+                                <div>
+                                  <h4>{u.title}</h4>
+                                  <p className="update-meta">{fmt(u.createdAt)}</p>
+                                </div>
+
+                                <div className="update-actions">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditUpdateModal(u)}
+                                    style={{
+                                      padding: "8px 10px",
+                                      borderRadius: 10,
+                                      border: "1px solid var(--border)",
+                                      background: "rgba(255,255,255,0.08)",
+                                      color: "var(--text)",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Edit Update
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteUpdate(u.id)}
+                                    style={{
+                                      padding: "8px 10px",
+                                      borderRadius: 10,
+                                      border: "1px solid var(--border)",
+                                      background: "rgba(255, 80, 80, 0.12)",
+                                      color: "var(--text)",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Delete Update
+                                  </button>
+                                </div>
+                              </div>
+
+                              <p>{u.body}</p>
+                            </article>
+                          ))}
+                        </div>
+                      )}
                     </section>
                   );
                 })}
