@@ -1,30 +1,38 @@
 package com.vasilika.portfoliotracker.web;
 
+import com.vasilika.portfoliotracker.domain.PlanningItem;
 import com.vasilika.portfoliotracker.domain.Project;
 import com.vasilika.portfoliotracker.domain.Task;
 import com.vasilika.portfoliotracker.domain.Update;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskType;
+import com.vasilika.portfoliotracker.repo.PlanningItemRepository;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
-import com.vasilika.portfoliotracker.web.dto.*;
-import com.vasilika.portfoliotracker.web.mapper.TaskMapper;
-import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-import com.vasilika.portfoliotracker.domain.PlanningItem;
-import com.vasilika.portfoliotracker.repo.PlanningItemRepository;
+import com.vasilika.portfoliotracker.service.TaskTypeOptionService;
+import com.vasilika.portfoliotracker.web.dto.CreateProjectRequest;
+import com.vasilika.portfoliotracker.web.dto.CreateTaskRequest;
+import com.vasilika.portfoliotracker.web.dto.CreateUpdateRequest;
 import com.vasilika.portfoliotracker.web.dto.PlanningItemDto;
 import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardItemRequest;
 import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardRequest;
+import com.vasilika.portfoliotracker.web.dto.TaskDto;
+import com.vasilika.portfoliotracker.web.dto.UpdateProjectRequest;
+import com.vasilika.portfoliotracker.web.dto.UpdateTaskRequest;
+import com.vasilika.portfoliotracker.web.dto.UpdateDto;
+import com.vasilika.portfoliotracker.web.dto.UpdateUpdateRequest;
 import com.vasilika.portfoliotracker.web.mapper.PlanningItemMapper;
+import com.vasilika.portfoliotracker.web.mapper.TaskMapper;
+import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -36,12 +44,20 @@ public class AdminProjectItemsController {
     private final TaskRepository tasks;
     private final UpdateRepository updates;
     private final PlanningItemRepository planningItems;
+    private final TaskTypeOptionService taskTypeOptionService;
 
-    public AdminProjectItemsController(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates,  PlanningItemRepository planningItems) {
+    public AdminProjectItemsController(
+            ProjectRepository projects,
+            TaskRepository tasks,
+            UpdateRepository updates,
+            PlanningItemRepository planningItems,
+            TaskTypeOptionService taskTypeOptionService
+    ) {
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
         this.planningItems = planningItems;
+        this.taskTypeOptionService = taskTypeOptionService;
     }
 
     /**
@@ -99,8 +115,14 @@ public class AdminProjectItemsController {
         t.setTitle(req.title());
         t.setDescription(req.description());
 
+        /*
+         * Task type is now configurable.
+         *
+         * Instead of mapping to a hardcoded enum, validate the incoming type code
+         * against the configured task type list in the database.
+         */
         t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        t.setType(parseEnum(TaskType.class, req.type()));
+        t.setType(taskTypeOptionService.requireValidCode(req.type()));
         t.setPriority(parseEnum(TaskPriority.class, req.priority()));
 
         t.setTargetVersion(req.targetVersion());
@@ -265,17 +287,27 @@ public class AdminProjectItemsController {
         if (req.title() != null) t.setTitle(req.title());
         if (req.description() != null) t.setDescription(req.description());
 
-        if (req.status() != null)
+        if (req.status() != null) {
             t.setStatus(parseEnum(TaskStatus.class, req.status()));
+        }
 
-        if (req.type() != null)
-            t.setType(parseEnum(TaskType.class, req.type()));
+        /*
+         * Task type is configurable now.
+         *
+         * Validate the incoming type code against the configured task type table
+         * instead of parsing a hardcoded enum.
+         */
+        if (req.type() != null) {
+            t.setType(taskTypeOptionService.requireValidCode(req.type()));
+        }
 
-        if (req.priority() != null)
+        if (req.priority() != null) {
             t.setPriority(parseEnum(TaskPriority.class, req.priority()));
+        }
 
-        if (req.targetVersion() != null)
+        if (req.targetVersion() != null) {
             t.setTargetVersion(req.targetVersion());
+        }
 
         t.setUpdatedAt(Instant.now());
 
@@ -283,7 +315,6 @@ public class AdminProjectItemsController {
 
         return ResponseEntity.ok(TaskMapper.toDto(saved));
     }
-
 
     /**
      *
@@ -295,7 +326,7 @@ public class AdminProjectItemsController {
      * Supports:
      * - title
      * - body
-     * -taskId
+     * - taskId
      */
     @PatchMapping("/{projectId}/updates/{updateId}")
     public ResponseEntity<UpdateDto> updateUpdate(
@@ -346,6 +377,7 @@ public class AdminProjectItemsController {
         Update saved = updates.save(u);
         return ResponseEntity.ok(UpdateMapper.toDto(saved));
     }
+
     /**
      * ==========================================================
      * GET /admin/projects/{projectId}/planning
@@ -358,7 +390,7 @@ public class AdminProjectItemsController {
      * - DONE tasks are excluded automatically
      */
     @GetMapping("/{projectId}/planning")
-    public ResponseEntity<java.util.List<PlanningItemDto>> getPlanningBoard(
+    public ResponseEntity<List<PlanningItemDto>> getPlanningBoard(
             @PathVariable UUID projectId
     ) {
         Project project = projects.findById(projectId)
@@ -391,7 +423,7 @@ public class AdminProjectItemsController {
      * - at most one item can be marked current
      */
     @PutMapping("/{projectId}/planning")
-    public ResponseEntity<java.util.List<PlanningItemDto>> savePlanningBoard(
+    public ResponseEntity<List<PlanningItemDto>> savePlanningBoard(
             @PathVariable UUID projectId,
             @Valid @RequestBody SavePlanningBoardRequest req
     ) {
@@ -409,7 +441,7 @@ public class AdminProjectItemsController {
         // Clear old board and recreate it from the incoming ordered list
         planningItems.deleteByProject_Id(projectId);
 
-        java.util.List<PlanningItem> savedItems = new java.util.ArrayList<>();
+        List<PlanningItem> savedItems = new ArrayList<>();
 
         for (int i = 0; i < req.items().size(); i++) {
             SavePlanningBoardItemRequest incoming = req.items().get(i);

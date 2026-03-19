@@ -3,7 +3,7 @@ package com.vasilika.portfoliotracker.service.query;
 import com.vasilika.portfoliotracker.domain.Project;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskType;
+import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
@@ -140,7 +140,7 @@ public class ProjectQueryService {
 
         // Parse optional enum filters
         TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
-        TaskType ty = type == null ? null : parseEnum(TaskType.class, type);
+        TaskTypeOption ty = type == null ? null : parseEnum(TaskTypeOption.class, type);
         TaskPriority pr = priority == null ? null : parseEnum(TaskPriority.class, priority);
 
         // Task pagination
@@ -241,7 +241,7 @@ public class ProjectQueryService {
         Project project = requireProjectBySlugAndDemo(slug, true);
 
         TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
-        TaskType ty = type == null ? null : parseEnum(TaskType.class, type);
+        TaskTypeOption ty = type == null ? null : parseEnum(TaskTypeOption.class, type);
         TaskPriority pr = priority == null ? null : parseEnum(TaskPriority.class, priority);
 
         Pageable tp = PageRequest.of(tasksPage, tasksSize);

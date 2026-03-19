@@ -5,7 +5,7 @@ import com.vasilika.portfoliotracker.domain.Task;
 import com.vasilika.portfoliotracker.domain.Update;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskType;
+import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
@@ -314,7 +314,7 @@ public class DemoProjectItemsController {
         t.setTitle(req.title());
         t.setDescription(req.description());
         t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        t.setType(parseEnum(TaskType.class, req.type()));
+        t.setType(parseEnum(TaskTypeOption.class, req.type()));
         t.setPriority(parseEnum(TaskPriority.class, req.priority()));
         t.setTargetVersion(req.targetVersion());
         t.setCreatedAt(Instant.now());
@@ -368,7 +368,7 @@ public class DemoProjectItemsController {
         if (req.title() != null) t.setTitle(req.title());
         if (req.description() != null) t.setDescription(req.description());
         if (req.status() != null) t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        if (req.type() != null) t.setType(parseEnum(TaskType.class, req.type()));
+        if (req.type() != null) t.setType(parseEnum(TaskTypeOption.class, req.type()));
         if (req.priority() != null) t.setPriority(parseEnum(TaskPriority.class, req.priority()));
         if (req.targetVersion() != null) t.setTargetVersion(req.targetVersion());
 

@@ -2,7 +2,6 @@ package com.vasilika.portfoliotracker.domain;
 
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskType;
 import jakarta.persistence.*;
 
 import java.time.Instant;
@@ -32,7 +31,7 @@ public class Task {
      * Stored as UUID for scalability and distributed systems.
      */
     @Id
-    @Column(columnDefinition = "uuid")
+    @Column(columnDefinition = "uuid", nullable = false, updatable = false)
     private UUID id;
 
     /**
@@ -72,15 +71,11 @@ public class Task {
     private TaskStatus status;
 
     /**
-     * Type/category of task:
-     * Examples:
-     * - FEATURE
-     * - BUG
-     * - REFACTOR
+     * Configurable task type code.
+     * Examples: FEATURE, BUG, REFACTOR, CHORE, DOCUMENTATION
      */
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private TaskType type;
+    @Column(name = "type_code", nullable = false, length = 50)
+    private String type;
 
     /**
      * Priority level of task.
@@ -112,6 +107,7 @@ public class Task {
     private Instant updatedAt;
 
 
+
     // ===== Getters and Setters =====
 
     public UUID getId() { return id; }
@@ -129,8 +125,8 @@ public class Task {
     public TaskStatus getStatus() { return status; }
     public void setStatus(TaskStatus status) { this.status = status; }
 
-    public TaskType getType() { return type; }
-    public void setType(TaskType type) { this.type = type; }
+    public String getType() { return type; }
+    public void setType(String type) {  this.type = type != null ? type.trim().toUpperCase() : null; }
 
     public TaskPriority getPriority() { return priority; }
     public void setPriority(TaskPriority priority) { this.priority = priority; }
