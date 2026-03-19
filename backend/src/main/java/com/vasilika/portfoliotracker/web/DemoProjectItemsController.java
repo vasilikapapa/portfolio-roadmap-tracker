@@ -1,25 +1,31 @@
 package com.vasilika.portfoliotracker.web;
 
+import com.vasilika.portfoliotracker.domain.PlanningItem;
 import com.vasilika.portfoliotracker.domain.Project;
 import com.vasilika.portfoliotracker.domain.Task;
 import com.vasilika.portfoliotracker.domain.Update;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
+import com.vasilika.portfoliotracker.repo.PlanningItemRepository;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
 import com.vasilika.portfoliotracker.service.DemoSeederService;
+import com.vasilika.portfoliotracker.service.TaskTypeOptionService;
 import com.vasilika.portfoliotracker.web.dto.CreateProjectRequest;
 import com.vasilika.portfoliotracker.web.dto.CreateTaskRequest;
 import com.vasilika.portfoliotracker.web.dto.CreateUpdateRequest;
+import com.vasilika.portfoliotracker.web.dto.PlanningItemDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDetailsDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDto;
+import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardItemRequest;
+import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardRequest;
 import com.vasilika.portfoliotracker.web.dto.TaskDto;
 import com.vasilika.portfoliotracker.web.dto.UpdateDto;
 import com.vasilika.portfoliotracker.web.dto.UpdateProjectRequest;
 import com.vasilika.portfoliotracker.web.dto.UpdateTaskRequest;
 import com.vasilika.portfoliotracker.web.dto.UpdateUpdateRequest;
+import com.vasilika.portfoliotracker.web.mapper.PlanningItemMapper;
 import com.vasilika.portfoliotracker.web.mapper.ProjectMapper;
 import com.vasilika.portfoliotracker.web.mapper.TaskMapper;
 import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
@@ -28,12 +34,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import com.vasilika.portfoliotracker.domain.PlanningItem;
-import com.vasilika.portfoliotracker.repo.PlanningItemRepository;
-import com.vasilika.portfoliotracker.web.dto.PlanningItemDto;
-import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardItemRequest;
-import com.vasilika.portfoliotracker.web.dto.SavePlanningBoardRequest;
-import com.vasilika.portfoliotracker.web.mapper.PlanningItemMapper;
+
 import java.net.URI;
 import java.time.Instant;
 import java.util.Locale;
@@ -69,19 +70,22 @@ public class DemoProjectItemsController {
     private final UpdateRepository updates;
     private final DemoSeederService demoSeeder;
     private final PlanningItemRepository planningItems;
+    private final TaskTypeOptionService taskTypeOptionService;
 
     public DemoProjectItemsController(
             ProjectRepository projects,
             TaskRepository tasks,
             UpdateRepository updates,
             PlanningItemRepository planningItems,
-            DemoSeederService demoSeeder
+            DemoSeederService demoSeeder,
+            TaskTypeOptionService taskTypeOptionService
     ) {
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
         this.planningItems = planningItems;
         this.demoSeeder = demoSeeder;
+        this.taskTypeOptionService = taskTypeOptionService;
     }
 
     /**
@@ -314,7 +318,7 @@ public class DemoProjectItemsController {
         t.setTitle(req.title());
         t.setDescription(req.description());
         t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        t.setType(parseEnum(TaskTypeOption.class, req.type()));
+        t.setType(taskTypeOptionService.requireValidCode(req.type()));
         t.setPriority(parseEnum(TaskPriority.class, req.priority()));
         t.setTargetVersion(req.targetVersion());
         t.setCreatedAt(Instant.now());
@@ -368,7 +372,7 @@ public class DemoProjectItemsController {
         if (req.title() != null) t.setTitle(req.title());
         if (req.description() != null) t.setDescription(req.description());
         if (req.status() != null) t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        if (req.type() != null) t.setType(parseEnum(TaskTypeOption.class, req.type()));
+        if (req.type() != null) t.setType(taskTypeOptionService.requireValidCode(req.type()));
         if (req.priority() != null) t.setPriority(parseEnum(TaskPriority.class, req.priority()));
         if (req.targetVersion() != null) t.setTargetVersion(req.targetVersion());
 
@@ -591,6 +595,7 @@ public class DemoProjectItemsController {
         demoSeeder.seedDemoData();
         return ResponseEntity.noContent().build();
     }
+
     /**
      * ==========================================================
      * GET /demo/projects/{projectId}/planning

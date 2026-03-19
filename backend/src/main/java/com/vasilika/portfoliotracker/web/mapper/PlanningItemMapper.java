@@ -18,7 +18,7 @@ public class PlanningItemMapper {
                 item.getTask().getTitle(),
                 item.getTask().getDescription(),
                 item.getTask().getStatus().name(),
-                item.getTask().getType().name(),
+                item.getTask().getType(),
                 item.getTask().getPriority().name(),
                 item.getTask().getTargetVersion(),
                 item.getSortOrder(),
