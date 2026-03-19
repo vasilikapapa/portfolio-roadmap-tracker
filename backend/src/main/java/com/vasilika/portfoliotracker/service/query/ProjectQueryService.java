@@ -3,10 +3,10 @@ package com.vasilika.portfoliotracker.service.query;
 import com.vasilika.portfoliotracker.domain.Project;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
+import com.vasilika.portfoliotracker.service.TaskTypeOptionService;
 import com.vasilika.portfoliotracker.web.dto.PageDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDetailsDto;
 import com.vasilika.portfoliotracker.web.dto.ProjectDetailsPagedDto;
@@ -32,7 +32,7 @@ import java.util.Locale;
  * - Filtering and paginating tasks
  * - Paginating updates
  *
- *  IMPORTANT: This service supports TWO "tenants":
+ * IMPORTANT: This service supports TWO "tenants":
  * -------------------------------------------------
  * 1) Public portfolio data (demo=false)
  * 2) Demo sandbox data (demo=true)
@@ -51,14 +51,21 @@ public class ProjectQueryService {
     private final ProjectRepository projects;
     private final TaskRepository tasks;
     private final UpdateRepository updates;
+    private final TaskTypeOptionService taskTypeOptionService;
 
     /**
      * Constructor injection for repositories.
      */
-    public ProjectQueryService(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates) {
+    public ProjectQueryService(
+            ProjectRepository projects,
+            TaskRepository tasks,
+            UpdateRepository updates,
+            TaskTypeOptionService taskTypeOptionService
+    ) {
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
+        this.taskTypeOptionService = taskTypeOptionService;
     }
 
     // =========================================================
@@ -138,9 +145,9 @@ public class ProjectQueryService {
     ) {
         Project project = requireProjectBySlugAndDemo(slug, false);
 
-        // Parse optional enum filters
+        // Parse optional filters
         TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
-        TaskTypeOption ty = type == null ? null : parseEnum(TaskTypeOption.class, type);
+        String ty = type == null ? null : taskTypeOptionService.requireValidCode(type);
         TaskPriority pr = priority == null ? null : parseEnum(TaskPriority.class, priority);
 
         // Task pagination
@@ -241,7 +248,7 @@ public class ProjectQueryService {
         Project project = requireProjectBySlugAndDemo(slug, true);
 
         TaskStatus st = status == null ? null : parseEnum(TaskStatus.class, status);
-        TaskTypeOption ty = type == null ? null : parseEnum(TaskTypeOption.class, type);
+        String ty = type == null ? null : taskTypeOptionService.requireValidCode(type);
         TaskPriority pr = priority == null ? null : parseEnum(TaskPriority.class, priority);
 
         Pageable tp = PageRequest.of(tasksPage, tasksSize);
