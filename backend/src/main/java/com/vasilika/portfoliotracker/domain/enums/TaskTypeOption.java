@@ -1,4 +1,4 @@
-package com.vasilika.portfoliotracker.domain;
+package com.vasilika.portfoliotracker.domain.enums.
 
 import jakarta.persistence.*;
 
