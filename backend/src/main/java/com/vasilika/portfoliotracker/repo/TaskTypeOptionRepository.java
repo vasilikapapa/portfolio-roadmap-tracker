@@ -1,6 +1,6 @@
 package com.vasilika.portfoliotracker.repo;
 
-import com.vasilika.portfoliotracker.domain.TaskTypeOption;
+import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

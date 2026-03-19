@@ -1,6 +1,6 @@
 package com.vasilika.portfoliotracker.service;
 
-import com.vasilika.portfoliotracker.domain.TaskTypeOption;
+import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import com.vasilika.portfoliotracker.repo.TaskTypeOptionRepository;
 import org.springframework.stereotype.Service;
 

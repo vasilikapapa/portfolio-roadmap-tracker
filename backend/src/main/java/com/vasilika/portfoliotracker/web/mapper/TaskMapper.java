@@ -13,7 +13,7 @@ public class TaskMapper {
                 t.getTitle(),
                 t.getDescription(),
                 t.getStatus().name(),
-                t.getType().name(),
+                t.getType(),
                 t.getPriority().name(),
                 t.getTargetVersion(),
                 t.getCreatedAt(),
