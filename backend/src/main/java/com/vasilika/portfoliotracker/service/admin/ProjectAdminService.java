@@ -8,7 +8,9 @@ import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
 import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import com.vasilika.portfoliotracker.repo.ProjectRepository;
 import com.vasilika.portfoliotracker.repo.TaskRepository;
+import com.vasilika.portfoliotracker.repo.TaskTypeOptionRepository;
 import com.vasilika.portfoliotracker.repo.UpdateRepository;
+import com.vasilika.portfoliotracker.service.TaskTypeOptionService;
 import com.vasilika.portfoliotracker.web.dto.CreateProjectRequest;
 import com.vasilika.portfoliotracker.web.dto.CreateTaskRequest;
 import com.vasilika.portfoliotracker.web.dto.CreateUpdateRequest;
@@ -50,15 +52,20 @@ public class ProjectAdminService {
     private final ProjectRepository projects;
     private final TaskRepository tasks;
     private final UpdateRepository updates;
+    private final TaskTypeOptionService taskTypeOptionService;
+
 
     /**
      * Constructor injection for repositories.
      * Keeps dependencies explicit and testable.
      */
-    public ProjectAdminService(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates) {
+    public ProjectAdminService(ProjectRepository projects, TaskRepository tasks, UpdateRepository updates,
+                               TaskTypeOptionService taskTypeOptionService){
         this.projects = projects;
         this.tasks = tasks;
         this.updates = updates;
+        this.taskTypeOptionService = taskTypeOptionService;
+
     }
 
     /**
@@ -99,7 +106,7 @@ public class ProjectAdminService {
         t.setTitle(req.title());
         t.setDescription(req.description());
         t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        t.setType(parseEnum(TaskTypeOption.class, req.type()));
+        t.setType(taskTypeOptionService.requireValidCode(req.type()));
         t.setPriority(parseEnum(TaskPriority.class, req.priority()));
         t.setTargetVersion(req.targetVersion());
         t.setCreatedAt(Instant.now());
@@ -160,7 +167,7 @@ public class ProjectAdminService {
         if (req.targetVersion() != null) t.setTargetVersion(req.targetVersion());
 
         if (req.status() != null) t.setStatus(parseEnum(TaskStatus.class, req.status()));
-        if (req.type() != null) t.setType(parseEnum(TaskTypeOption.class, req.type()));
+        if (req.type() != null) t.setType(taskTypeOptionService.requireValidCode(req.type()));
         if (req.priority() != null) t.setPriority(parseEnum(TaskPriority.class, req.priority()));
 
         t.setUpdatedAt(Instant.now());
