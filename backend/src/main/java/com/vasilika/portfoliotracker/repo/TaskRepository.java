@@ -3,7 +3,6 @@ package com.vasilika.portfoliotracker.repo;
 import com.vasilika.portfoliotracker.domain.Task;
 import com.vasilika.portfoliotracker.domain.enums.TaskPriority;
 import com.vasilika.portfoliotracker.domain.enums.TaskStatus;
-import com.vasilika.portfoliotracker.domain.enums.TaskTypeOption;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,6 +29,12 @@ import java.util.UUID;
  * - We do NOT use tenantKey here because your entities
  *   do not contain tenantKey.
  * - Demo separation is handled at the Project level via Project.demo.
+ *
+ * IMPORTANT:
+ * - Task type is now configurable and stored as a String code
+ *   (examples: FEATURE, BUG, CHORE, DOCUMENTATION)
+ * - Because of that, all repository methods now use String for type
+ *   instead of a TaskType enum.
  */
 public interface TaskRepository extends JpaRepository<Task, UUID> {
 
@@ -42,20 +47,20 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
 
     List<Task> findByProject_IdAndStatus(UUID projectId, TaskStatus status);
 
-    List<Task> findByProject_IdAndType(UUID projectId, TaskTypeOption type);
+    List<Task> findByProject_IdAndType(UUID projectId, String type);
 
     List<Task> findByProject_IdAndPriority(UUID projectId, TaskPriority priority);
 
-    List<Task> findByProject_IdAndStatusAndType(UUID projectId, TaskStatus status, TaskTypeOption type);
+    List<Task> findByProject_IdAndStatusAndType(UUID projectId, TaskStatus status, String type);
 
     List<Task> findByProject_IdAndStatusAndPriority(UUID projectId, TaskStatus status, TaskPriority priority);
 
-    List<Task> findByProject_IdAndTypeAndPriority(UUID projectId, TaskTypeOption type, TaskPriority priority);
+    List<Task> findByProject_IdAndTypeAndPriority(UUID projectId, String type, TaskPriority priority);
 
     List<Task> findByProject_IdAndStatusAndTypeAndPriority(
             UUID projectId,
             TaskStatus status,
-            TaskTypeOption type,
+            String type,
             TaskPriority priority
     );
 
@@ -86,9 +91,13 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     Page<Task> findPagedForProject(
             @Param("projectId") UUID projectId,
             @Param("status") TaskStatus status,
-            @Param("type") TaskTypeOption type,
+            @Param("type") String type,
             @Param("priority") TaskPriority priority,
             Pageable pageable
     );
-    List<Task> findAllByProject_DemoTrue(); // for reset
+
+    /**
+     * Used by demo reset flow.
+     */
+    List<Task> findAllByProject_DemoTrue();
 }
