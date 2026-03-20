@@ -74,7 +74,7 @@ public class Task {
      * Configurable task type code.
      * Examples: FEATURE, BUG, REFACTOR, CHORE, DOCUMENTATION
      */
-    @Column(name = "type_code", nullable = false, length = 50)
+    @Column(name = "type", nullable = false, length = 50)
     private String type;
 
     /**
