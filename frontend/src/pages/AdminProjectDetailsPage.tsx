@@ -10,15 +10,19 @@ import {
   type TaskDto,
   type TaskPriority,
   type TaskStatus,
-  type TaskType,
   type UpdateDto,
 } from "../lib/api";
 
 import "../styles/projectDetails.css";
 
 /**
- * Groups tasks into Kanban columns by their status:
- * BACKLOG / IN_PROGRESS / DONE
+ * Default task types always shown first in the dropdown.
+ * Backend now supports flexible string types, so these are just common options.
+ */
+const DEFAULT_TASK_TYPE_OPTIONS = ["FEATURE", "BUG", "REFACTOR"] as const;
+
+/**
+ * Groups tasks into Kanban columns by their status.
  */
 function groupByStatus(tasks: TaskDto[]) {
   const map: Record<TaskStatus, TaskDto[]> = {
@@ -38,7 +42,7 @@ function groupByStatus(tasks: TaskDto[]) {
  * Groups updates by related task.
  *
  * Rules:
- * - If update.taskId exists, group under that task
+ * - If update.taskId exists, group under that task id
  * - Otherwise place it under "general"
  * - Each group is sorted newest first
  */
@@ -73,7 +77,7 @@ function fmt(iso: string) {
 }
 
 /**
- * Converts TaskStatus enum values into friendly column labels.
+ * Friendly label for task status columns.
  */
 function ColumnLabel({ status }: { status: TaskStatus }) {
   return (
@@ -87,6 +91,28 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
   );
 }
 
+/**
+ * Formats backend task type values for display.
+ *
+ * Examples:
+ * - FEATURE -> Feature
+ * - BUG_FIX -> Bug Fix
+ * - api-integration -> Api Integration
+ */
+function formatTaskType(type?: string | null) {
+  if (!type) return "Unspecified";
+
+  return type
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+/**
+ * Temporary draft item used only while creating
+ * multiple updates in one modal submission.
+ */
 type UpdateDraft = {
   title: string;
   body: string;
@@ -98,62 +124,124 @@ export default function AdminProjectDetailsPage() {
 
   const [data, setData] = useState<ProjectDetailsDto | null>(null);
 
+  // ---------------------------
   // Page state
+  // ---------------------------
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Modal state
+  // ---------------------------
+  // Modal open state
+  // ---------------------------
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
+  // ---------------------------
   // Editing state
+  // ---------------------------
   const [editingTask, setEditingTask] = useState<TaskDto | null>(null);
   const [editingUpdate, setEditingUpdate] = useState<UpdateDto | null>(null);
 
-  // Modal server errors (shown INSIDE modal)
+  // ---------------------------
+  // Server errors shown inside modals
+  // ---------------------------
   const [taskServerError, setTaskServerError] = useState<string | null>(null);
   const [updateServerError, setUpdateServerError] = useState<string | null>(
     null
   );
 
-  // Modal field-level validation errors
-  const [taskErrors, setTaskErrors] = useState<{ title?: string }>({});
+  // ---------------------------
+  // Field-level validation errors
+  // ---------------------------
+  const [taskErrors, setTaskErrors] = useState<{
+    title?: string;
+    type?: string;
+  }>({});
   const [updateErrors, setUpdateErrors] = useState<{
     title?: string;
     body?: string;
     drafts?: string;
   }>({});
 
-  // Create/Edit Task form state
+  // ---------------------------
+  // Task form state
+  // ---------------------------
   const [tTitle, setTTitle] = useState("");
   const [tDesc, setTDesc] = useState("");
   const [tStatus, setTStatus] = useState<TaskStatus>("BACKLOG");
-  const [tType, setTType] = useState<TaskType>("FEATURE");
+
+  /**
+   * Task type UI state
+   *
+   * - tTypeSelect = value chosen in dropdown
+   * - tTypeCustom = manual value when dropdown is OTHER
+   *
+   * Final backend payload always receives a single string.
+   */
+  const [tTypeSelect, setTTypeSelect] = useState("FEATURE");
+  const [tTypeCustom, setTTypeCustom] = useState("");
+
   const [tPriority, setTPriority] = useState<TaskPriority>("MEDIUM");
   const [tTarget, setTTarget] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
 
-  // Create/Edit Update form state
-  // - uTaskId lets an update optionally reference a specific task
-  // - empty string means "General project update"
+  // ---------------------------
+  // Update form state
+  // ---------------------------
   const [uTaskId, setUTaskId] = useState("");
   const [uTitle, setUTitle] = useState("");
   const [uBody, setUBody] = useState("");
   const [creatingUpdate, setCreatingUpdate] = useState(false);
 
-  // Create mode only: multiple drafts for the same selected task
+  // ---------------------------
+  // Create mode only:
+  // allows multiple updates to be submitted at once
+  // for the same selected task
+  // ---------------------------
   const [updateDrafts, setUpdateDrafts] = useState<UpdateDraft[]>([
     { title: "", body: "" },
   ]);
 
-  // Update group expand/collapse state
+  // ---------------------------
+  // Update group collapse / expand state
+  // ---------------------------
   const [expandedUpdateGroups, setExpandedUpdateGroups] = useState<Set<string>>(
     new Set(["general"])
   );
+
+  /**
+   * Stores DOM refs for each update group so we can
+   * scroll to a group when "See Updates" is clicked.
+   */
   const updateGroupRefs = useRef<Record<string, HTMLElement | null>>({});
 
   /**
-   * Reset task modal state back to clean CREATE mode defaults.
+   * Task type dropdown options:
+   * 1. FEATURE / BUG / REFACTOR
+   * 2. any extra types already used in this project
+   * 3. OTHER
+   *
+   * This keeps the UI friendly while still supporting
+   * flexible backend task types.
+   */
+  const taskTypeOptions = useMemo(() => {
+    const existingTypes = Array.from(
+      new Set((data?.tasks ?? []).map((task) => task.type).filter(Boolean))
+    ).filter((type) => !DEFAULT_TASK_TYPE_OPTIONS.includes(type as any));
+
+    return [...DEFAULT_TASK_TYPE_OPTIONS, ...existingTypes, "OTHER"];
+  }, [data]);
+
+  /**
+   * Final task type sent to backend.
+   * - normal dropdown value
+   * - or custom input value if OTHER is selected
+   */
+  const finalTaskType =
+    tTypeSelect === "OTHER" ? tTypeCustom.trim() : tTypeSelect.trim();
+
+  /**
+   * Reset task modal state to clean CREATE mode defaults.
    */
   function resetTaskModalState() {
     setTaskErrors({});
@@ -162,13 +250,14 @@ export default function AdminProjectDetailsPage() {
     setTTitle("");
     setTDesc("");
     setTStatus("BACKLOG");
-    setTType("FEATURE");
+    setTTypeSelect("FEATURE");
+    setTTypeCustom("");
     setTPriority("MEDIUM");
     setTTarget("");
   }
 
   /**
-   * Reset update modal state back to clean CREATE mode defaults.
+   * Reset update modal state to clean CREATE mode defaults.
    */
   function resetUpdateModalState() {
     setUpdateErrors({});
@@ -180,25 +269,18 @@ export default function AdminProjectDetailsPage() {
     setUpdateDrafts([{ title: "", body: "" }]);
   }
 
-  /**
-   * Close task modal and clear form state.
-   */
   function closeTaskModal() {
     setTaskModalOpen(false);
     resetTaskModalState();
   }
 
-  /**
-   * Close update modal and clear form state.
-   */
   function closeUpdateModal() {
     setUpdateModalOpen(false);
     resetUpdateModalState();
   }
 
   /**
-   * Loads fresh project details from the backend.
-   * Used on initial page load and after create/edit/delete actions.
+   * Loads project details from backend.
    */
   async function load() {
     if (!slug) return;
@@ -222,7 +304,7 @@ export default function AdminProjectDetailsPage() {
   }, [slug]);
 
   /**
-   * ESC closes whichever modal is currently open.
+   * Close open modals with Escape.
    */
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -237,15 +319,8 @@ export default function AdminProjectDetailsPage() {
     }
   }, [taskModalOpen, updateModalOpen]);
 
-  /**
-   * Groups tasks for the Kanban board.
-   */
   const grouped = useMemo(() => groupByStatus(data?.tasks ?? []), [data]);
 
-  /**
-   * Keeps a flat sorted copy of updates.
-   * Still useful for quick counts / empty state checks.
-   */
   const updatesSorted = useMemo(() => {
     const u = [...(data?.updates ?? [])];
     u.sort(
@@ -254,18 +329,10 @@ export default function AdminProjectDetailsPage() {
     return u;
   }, [data]);
 
-  /**
-   * Groups updates by task so the UI can show progress history
-   * under each related task.
-   */
   const updatesGrouped = useMemo(() => {
     return groupUpdatesByTask(data?.updates ?? []);
   }, [data]);
 
-  /**
-   * Creates a quick task lookup map by task id.
-   * This helps us show task titles for grouped updates.
-   */
   const taskLookup = useMemo(() => {
     const map = new Map<string, TaskDto>();
 
@@ -276,9 +343,6 @@ export default function AdminProjectDetailsPage() {
     return map;
   }, [data]);
 
-  /**
-   * Ordered list of task group ids excluding the special "general" bucket.
-   */
   const groupedTaskIds = useMemo(() => {
     return Object.keys(updatesGrouped).filter((key) => key !== "general");
   }, [updatesGrouped]);
@@ -286,11 +350,13 @@ export default function AdminProjectDetailsPage() {
   function toggleUpdateGroup(groupKey: string) {
     setExpandedUpdateGroups((prev) => {
       const next = new Set(prev);
+
       if (next.has(groupKey)) {
         next.delete(groupKey);
       } else {
         next.add(groupKey);
       }
+
       return next;
     });
   }
@@ -310,16 +376,17 @@ export default function AdminProjectDetailsPage() {
     });
   }
 
-  /**
-   * Open task modal in CREATE mode
-   */
   function openCreateTaskModal() {
     resetTaskModalState();
     setTaskModalOpen(true);
   }
 
   /**
-   * Open task modal in EDIT mode
+   * Open task modal in EDIT mode.
+   *
+   * If the current backend type matches a common/default option
+   * or an existing task type option, we select it directly.
+   * Otherwise we switch to OTHER and place the value into custom input.
    */
   function openEditTaskModal(task: TaskDto) {
     setEditingTask(task);
@@ -329,26 +396,29 @@ export default function AdminProjectDetailsPage() {
     setTTitle(task.title ?? "");
     setTDesc(task.description ?? "");
     setTStatus(task.status);
-    setTType(task.type);
+
+    const existingType = task.type ?? "";
+    const canSelectDirectly = taskTypeOptions.includes(existingType);
+
+    if (canSelectDirectly && existingType !== "OTHER") {
+      setTTypeSelect(existingType);
+      setTTypeCustom("");
+    } else {
+      setTTypeSelect("OTHER");
+      setTTypeCustom(existingType);
+    }
+
     setTPriority(task.priority);
     setTTarget(task.targetVersion ?? "");
 
     setTaskModalOpen(true);
   }
 
-  /**
-   * Open update modal in CREATE mode
-   */
   function openCreateUpdateModal() {
     resetUpdateModalState();
     setUpdateModalOpen(true);
   }
 
-  /**
-   * Open update modal in EDIT mode
-   *
-   * - preload related task so the user can keep/change/remove it
-   */
   function openEditUpdateModal(update: UpdateDto) {
     setEditingUpdate(update);
     setUpdateServerError(null);
@@ -385,13 +455,15 @@ export default function AdminProjectDetailsPage() {
   }
 
   /**
-   * Create or update a task
+   * Create or update a task.
    */
   async function onSubmitTask() {
     if (!data) return;
 
-    const nextErrors: { title?: string } = {};
+    const nextErrors: { title?: string; type?: string } = {};
+
     if (!tTitle.trim()) nextErrors.title = "Task title is required.";
+    if (!finalTaskType) nextErrors.type = "Task type is required.";
 
     setTaskErrors(nextErrors);
     setTaskServerError(null);
@@ -402,7 +474,7 @@ export default function AdminProjectDetailsPage() {
       title: tTitle.trim(),
       description: tDesc.trim() ? tDesc.trim() : null,
       status: tStatus,
-      type: tType,
+      type: finalTaskType,
       priority: tPriority,
       targetVersion: tTarget.trim() ? tTarget.trim() : null,
     };
@@ -426,10 +498,7 @@ export default function AdminProjectDetailsPage() {
   }
 
   /**
-   * Create or update an update entry
-   *
-   * - edit mode: updates one existing update
-   * - create mode: allows multiple new updates for the same selected task
+   * Create or update updates.
    */
   async function onSubmitUpdate() {
     if (!data) return;
@@ -477,9 +546,7 @@ export default function AdminProjectDetailsPage() {
 
     if (cleanedDrafts.length === 0) {
       nextErrors.drafts = "Add at least one update with a title and body.";
-    } else if (
-      cleanedDrafts.some((draft) => !draft.title || !draft.body)
-    ) {
+    } else if (cleanedDrafts.some((draft) => !draft.title || !draft.body)) {
       nextErrors.drafts =
         "Each update in the list must include both a title and a body.";
     }
@@ -510,9 +577,6 @@ export default function AdminProjectDetailsPage() {
     }
   }
 
-  /**
-   * Delete a task after confirmation.
-   */
   async function onDeleteTask(taskId: string) {
     if (!data) return;
     if (!confirm("Delete this task?")) return;
@@ -526,9 +590,6 @@ export default function AdminProjectDetailsPage() {
     }
   }
 
-  /**
-   * Delete an update after confirmation.
-   */
   async function onDeleteUpdate(updateId: string) {
     if (!confirm("Delete this update?")) return;
 
@@ -541,9 +602,6 @@ export default function AdminProjectDetailsPage() {
     }
   }
 
-  /**
-   * Delete the whole project after confirmation.
-   */
   async function onDeleteProject() {
     if (!data) return;
 
@@ -642,11 +700,13 @@ export default function AdminProjectDetailsPage() {
               </div>
             }
           />
+
           {data.project.description && (
             <div className="projectDescription">
               {data.project.description}
             </div>
           )}
+
           <div className="spacer" />
 
           <section>
@@ -672,7 +732,7 @@ export default function AdminProjectDetailsPage() {
                         ) : null}
 
                         <div className="taskMeta">
-                          <span className="pill">{t.type}</span>
+                          <span className="pill">{formatTaskType(t.type)}</span>
                           <span className="pill">{t.priority}</span>
                           {t.targetVersion ? (
                             <span className="pill">{t.targetVersion}</span>
@@ -712,7 +772,14 @@ export default function AdminProjectDetailsPage() {
                           Updated {fmt(t.updatedAt)}
                         </div>
 
-                        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            marginTop: 10,
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                          }}
+                        >
                           {t.status === "DONE" && updatesGrouped[t.id]?.length ? (
                             <button
                               type="button"
@@ -803,6 +870,7 @@ export default function AdminProjectDetailsPage() {
                             : "Click to view history"}
                         </p>
                       </div>
+
                       <span>
                         {updatesGrouped.general.length}{" "}
                         {expandedUpdateGroups.has("general") ? "−" : "+"}
@@ -949,9 +1017,6 @@ export default function AdminProjectDetailsPage() {
             )}
           </section>
 
-          {/* =========================
-              Create/Edit Task Modal
-             ========================= */}
           {taskModalOpen && (
             <div
               role="dialog"
@@ -1066,14 +1131,42 @@ export default function AdminProjectDetailsPage() {
                       <option value="DONE">DONE</option>
                     </select>
 
+                    {/* 
+                      Task type select:
+                      - shows default types first
+                      - then existing project types
+                      - then OTHER
+                      - if OTHER is chosen, show a custom input
+                    */}
                     <select
-                      value={tType}
-                      onChange={(e) => setTType(e.target.value as TaskType)}
+                      value={tTypeSelect}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setTTypeSelect(next);
+
+                        if (next !== "OTHER") {
+                          setTTypeCustom("");
+                        }
+
+                        const hasValue =
+                          next === "OTHER"
+                            ? tTypeCustom.trim().length > 0
+                            : next.trim().length > 0;
+
+                        if (taskErrors.type && hasValue) {
+                          setTaskErrors((prev) => ({
+                            ...prev,
+                            type: undefined,
+                          }));
+                        }
+                      }}
                       style={{ padding: 10, borderRadius: 10 }}
                     >
-                      <option value="FEATURE">FEATURE</option>
-                      <option value="BUG">BUG</option>
-                      <option value="REFACTOR">REFACTOR</option>
+                      {taskTypeOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option === "OTHER" ? "OTHER" : formatTaskType(option)}
+                        </option>
+                      ))}
                     </select>
 
                     <select
@@ -1088,6 +1181,37 @@ export default function AdminProjectDetailsPage() {
                       <option value="HIGH">HIGH</option>
                     </select>
                   </div>
+
+                  {tTypeSelect === "OTHER" && (
+                    <input
+                      value={tTypeCustom}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setTTypeCustom(v);
+
+                        if (taskErrors.type && v.trim()) {
+                          setTaskErrors((prev) => ({
+                            ...prev,
+                            type: undefined,
+                          }));
+                        }
+                      }}
+                      placeholder="Enter custom task type"
+                      style={{
+                        padding: 10,
+                        borderRadius: 10,
+                        border: "1px solid var(--border)",
+                        background: "rgba(0,0,0,0.12)",
+                        color: "var(--text)",
+                      }}
+                    />
+                  )}
+
+                  {taskErrors.type && (
+                    <div style={{ color: "salmon", fontSize: 13, marginTop: -6 }}>
+                      {taskErrors.type}
+                    </div>
+                  )}
 
                   <input
                     value={tTarget}
@@ -1152,9 +1276,6 @@ export default function AdminProjectDetailsPage() {
             </div>
           )}
 
-          {/* =========================
-              Create/Edit Update Modal
-             ========================= */}
           {updateModalOpen && (
             <div
               role="dialog"
@@ -1217,7 +1338,6 @@ export default function AdminProjectDetailsPage() {
                 )}
 
                 <div style={{ display: "grid", gap: 12 }}>
-                  {/* Optional task selection for linking update(s) to roadmap work */}
                   <select
                     value={uTaskId}
                     onChange={(e) => setUTaskId(e.target.value)}

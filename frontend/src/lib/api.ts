@@ -1,25 +1,29 @@
 import { clearAuth, getToken } from "./auth";
 
 /**
- * Base API URL loaded from Vite environment variables.
- * Must be defined in .env.local or deployment environment.
- *
+ * ==========================================
+ * Base API URL
+ * ==========================================
+ * Loaded from Vite env variables.
  * Example:
  * VITE_API_URL=http://localhost:8081
  */
 const API_URL = import.meta.env.VITE_API_URL as string;
 
+// Fail fast if missing (prevents silent bugs)
 if (!API_URL) {
   throw new Error("Missing VITE_API_URL. Add it to .env.local");
 }
 
 /**
- * ========================
- * DTO Types (Data Transfer Objects)
- * ========================
- * These types mirror backend responses and requests.
+ * ==========================================
+ * DTO TYPES (Frontend <-> Backend contract)
+ * ==========================================
  */
 
+/**
+ * Project returned from backend
+ */
 export type ProjectDto = {
   id: string;
   slug: string;
@@ -33,6 +37,9 @@ export type ProjectDto = {
   updatedAt: string;
 };
 
+/**
+ * Partial update payload
+ */
 export type UpdateProjectRequest = Partial<{
   slug: string;
   name: string;
@@ -43,38 +50,62 @@ export type UpdateProjectRequest = Partial<{
   liveUrl: string | null;
 }>;
 
+/**
+ * Task enums
+ */
 export type TaskStatus = "BACKLOG" | "IN_PROGRESS" | "DONE";
-export type TaskType = "FEATURE" | "BUG" | "REFACTOR";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 
+/**
+ * Task type is now dynamic string (NOT enum anymore)
+ */
+export type TaskTypeOptionDto = {
+  code: string;
+  label: string;
+};
+
+/**
+ * Update task payload
+ */
 export type UpdateTaskRequest = Partial<{
   status: TaskStatus;
-  type: TaskType;
+  type: string;
   priority: TaskPriority;
   targetVersion: string | null;
   title: string;
   description: string | null;
 }>;
 
+/**
+ * Auth response
+ */
 export type LoginResponse = {
   accessToken: string;
   tokenType: string;
   expiresAt: string;
 };
 
+/**
+ * Task object
+ */
 export type TaskDto = {
   id: string;
   projectId: string;
   title: string;
   description?: string | null;
   status: TaskStatus;
-  type: TaskType;
+  type: string;
   priority: TaskPriority;
   targetVersion?: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
+/**
+ * Update object
+ * IMPORTANT CHANGE:
+ * - Now supports linking to a task
+ */
 export type UpdateDto = {
   id: string;
   projectId: string;
@@ -85,24 +116,29 @@ export type UpdateDto = {
   createdAt: string;
 };
 
-
+/**
+ * Full project page payload
+ */
 export type ProjectDetailsDto = {
   project: ProjectDto;
   tasks: TaskDto[];
   updates: UpdateDto[];
 };
 
+/**
+ * Create payloads
+ */
 export type CreateTaskRequest = {
   title: string;
   description?: string | null;
   status: TaskStatus;
-  type: TaskType;
+  type: string;
   priority: TaskPriority;
   targetVersion?: string | null;
 };
 
 export type CreateUpdateRequest = {
-  taskId?: string | null;
+  taskId?: string | null; // 🔥 KEY CHANGE
   title: string;
   body: string;
 };
@@ -118,14 +154,13 @@ export type CreateProjectRequest = {
 };
 
 /**
- * ========================
- * HTTP Helper
- * ========================
- *
- * - Attaches JWT token automatically (unless skipAuth)
- * - Parses JSON when available
- * - Returns undefined for 204 No Content
- * - Throws a readable error message on non-OK responses
+ * ==========================================
+ * HTTP HELPER
+ * ==========================================
+ * Handles:
+ * - Token injection
+ * - JSON parsing
+ * - Error handling
  */
 async function http<T>(
   path: string,
@@ -143,11 +178,16 @@ async function http<T>(
     },
   });
 
-  // If token expired/invalid: clear local storage so UI can recover cleanly.
+  /**
+   * Auto logout if token expired
+   */
   if (res.status === 401) {
     clearAuth();
   }
 
+  /**
+   * Error parsing (supports JSON + text)
+   */
   if (!res.ok) {
     const contentType = res.headers.get("content-type") ?? "";
     let details = "";
@@ -168,10 +208,12 @@ async function http<T>(
       details = "";
     }
 
-    const extra = details ? ` – ${details}` : "";
-    throw new Error(`HTTP ${res.status} ${res.statusText}${extra}`);
+    throw new Error(`HTTP ${res.status} ${res.statusText}${details ? " – " + details : ""}`);
   }
 
+  /**
+   * Handle empty responses (204)
+   */
   if (res.status === 204) return undefined as T;
 
   const text = await res.text();
@@ -180,14 +222,21 @@ async function http<T>(
   return JSON.parse(text) as T;
 }
 
-/** ---------- API Client ---------- */
+/**
+ * ==========================================
+ * API CLIENT
+ * ==========================================
+ */
 export const api = {
-  // ---- Public ----
+  /** ---------- PUBLIC ---------- */
+
   listProjects: () => http<ProjectDto[]>("/api/projects"),
+
   getProjectDetailsBySlug: (slug: string) =>
     http<ProjectDetailsDto>(`/api/projects/${encodeURIComponent(slug)}`),
 
-  // ---- Auth ----
+  /** ---------- AUTH ---------- */
+
   loginAdmin: (username: string, password: string) =>
     http<LoginResponse>("/auth/login", {
       method: "POST",
@@ -198,49 +247,63 @@ export const api = {
   loginDemo: (username: string, password: string) =>
     http<LoginResponse>("/auth/demo/login", {
       method: "POST",
-      skipAuth: true, // critical: prevents expired token from being sent
+      skipAuth: true,
       body: JSON.stringify({ username, password }),
     }),
 
-  // ---- Admin (real) ----
+  /** ---------- ADMIN ---------- */
+
   createProject: (payload: CreateProjectRequest) =>
-    http<ProjectDto>("/admin/projects", { method: "POST", body: JSON.stringify(payload) }),
+    http<ProjectDto>("/admin/projects", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   updateProject: (projectId: string, payload: UpdateProjectRequest) =>
-    http<ProjectDto>(`/admin/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    http<ProjectDto>(`/admin/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   deleteProject: (projectId: string) =>
     http<void>(`/admin/projects/${projectId}`, { method: "DELETE" }),
 
   createTask: (projectId: string, payload: CreateTaskRequest) =>
-    http<TaskDto>(`/admin/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(payload) }),
+    http<TaskDto>(`/admin/projects/${projectId}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   updateTask: (projectId: string, taskId: string, payload: UpdateTaskRequest) =>
-    http<TaskDto>(`/admin/projects/${projectId}/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    http<TaskDto>(`/admin/projects/${projectId}/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   deleteTask: (taskId: string) =>
     http<void>(`/admin/tasks/${taskId}`, { method: "DELETE" }),
 
+  /**
+   * 🔥 Updates now support taskId
+   */
   createUpdate: (projectId: string, payload: CreateUpdateRequest) =>
-    http<UpdateDto>(`/admin/projects/${projectId}/updates`, { method: "POST", body: JSON.stringify(payload) }),
+    http<UpdateDto>(`/admin/projects/${projectId}/updates`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  updateUpdate: (projectId: string, updateId: string, payload: CreateUpdateRequest) =>
+    http<UpdateDto>(`/admin/projects/${projectId}/updates/${updateId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   deleteUpdate: (updateId: string) =>
     http<void>(`/admin/updates/${updateId}`, { method: "DELETE" }),
 
-  updateUpdate: (projectId: string, updateId: string, payload: CreateUpdateRequest) =>
-  http<UpdateDto>(`/admin/projects/${projectId}/updates/${updateId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  }),
+  /** ---------- DEMO ---------- */
 
-  // ---- Demo (sandbox) ----
   demoReset: () => http<void>("/demo/reset", { method: "POST" }),
-
-  demoUpdateProject: (projectId: string, payload: UpdateProjectRequest) =>
-    http<ProjectDto>(`/demo/projects/${projectId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
 
   demoListProjects: () => http<ProjectDto[]>("/demo/projects"),
 
@@ -248,29 +311,39 @@ export const api = {
     http<ProjectDetailsDto>(`/demo/projects/${encodeURIComponent(slug)}`),
 
   demoCreateTask: (projectId: string, payload: CreateTaskRequest) =>
-    http<TaskDto>(`/demo/projects/${projectId}/tasks`, { method: "POST", body: JSON.stringify(payload) }),
+    http<TaskDto>(`/demo/projects/${projectId}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   demoUpdateTask: (projectId: string, taskId: string, payload: UpdateTaskRequest) =>
-    http<TaskDto>(`/demo/projects/${projectId}/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    http<TaskDto>(`/demo/projects/${projectId}/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
-demoDeleteTask: (projectId: string, taskId: string) =>
-  http<void>(`/demo/projects/${projectId}/tasks/${taskId}`, {
-    method: "DELETE",
-  }),
+  demoDeleteTask: (projectId: string, taskId: string) =>
+    http<void>(`/demo/projects/${projectId}/tasks/${taskId}`, {
+      method: "DELETE",
+    }),
 
-demoDeleteUpdate: (projectId: string, updateId: string) =>
-  http<void>(`/demo/projects/${projectId}/updates/${updateId}`, {
-    method: "DELETE",
-  }),
   demoCreateUpdate: (projectId: string, payload: CreateUpdateRequest) =>
-    http<UpdateDto>(`/demo/projects/${projectId}/updates`, { method: "POST", body: JSON.stringify(payload) }),
+    http<UpdateDto>(`/demo/projects/${projectId}/updates`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   demoUpdateUpdate: (projectId: string, updateId: string, payload: CreateUpdateRequest) =>
-  http<UpdateDto>(`/demo/projects/${projectId}/updates/${updateId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  }),
-  
+    http<UpdateDto>(`/demo/projects/${projectId}/updates/${updateId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  demoDeleteUpdate: (projectId: string, updateId: string) =>
+    http<void>(`/demo/projects/${projectId}/updates/${updateId}`, {
+      method: "DELETE",
+    }),
+
   demoCreateProject: (payload: CreateProjectRequest) =>
     http<ProjectDto>("/demo/projects", {
       method: "POST",
@@ -281,5 +354,4 @@ demoDeleteUpdate: (projectId: string, updateId: string) =>
     http<void>(`/demo/projects/${projectId}`, {
       method: "DELETE",
     }),
-  
 };

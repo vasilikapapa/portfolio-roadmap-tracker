@@ -88,6 +88,30 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
 }
 
 /**
+ * Formats backend task type values for display.
+ *
+ * Why this matters:
+ * - Backend task types are now dynamic strings
+ * - They may come as:
+ *   "FEATURE"
+ *   "BUG_FIX"
+ *   "tech_debt"
+ *   "api integration"
+ *
+ * This helper makes them display nicely in the UI
+ * without depending on a fixed frontend enum.
+ */
+function formatTaskType(type?: string | null) {
+  if (!type) return "Unspecified";
+
+  return type
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+/**
  * ProjectDetailsPage (PUBLIC)
  *
  * Purpose:
@@ -97,6 +121,7 @@ function ColumnLabel({ status }: { status: TaskStatus }) {
  * - This page remains read-only
  * - Users can still click Edit, but protected access is handled
  *   through admin/demo login routing
+ * - Task type support is backend-driven via string values
  */
 export default function ProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -279,12 +304,13 @@ export default function ProjectDetailsPage() {
               </div>
             }
           />
-           {data.project.description && (
-              <div className="projectDescription">
-                {data.project.description}
-              </div>
-            )}
-            
+
+          {data.project.description && (
+            <div className="projectDescription">
+              {data.project.description}
+            </div>
+          )}
+
           <div className="spacer" />
 
           {/* =========================
@@ -313,15 +339,23 @@ export default function ProjectDetailsPage() {
                         ) : null}
 
                         <div className="taskMeta">
-                          <span className="pill">{t.type}</span>
+                          {/* 
+                            Backend task type is now treated as a dynamic string.
+                            We format it for display instead of relying on a fixed enum.
+                          */}
+                          <span className="pill">{formatTaskType(t.type)}</span>
                           <span className="pill">{t.priority}</span>
+
                           {t.targetVersion ? (
                             <span className="pill">{t.targetVersion}</span>
                           ) : null}
+
                           <span className="pill">{t.status}</span>
                         </div>
 
-                        <div className="taskFooter">Updated {fmt(t.updatedAt)}</div>
+                        <div className="taskFooter">
+                          Updated {fmt(t.updatedAt)}
+                        </div>
                       </div>
                     ))}
 
@@ -388,11 +422,27 @@ export default function ProjectDetailsPage() {
                       <div className="update-group-header">
                         <div>
                           <h3>{task?.title ?? "Related Task"}</h3>
-                          {task?.targetVersion ? (
-                            <p className="update-group-subtitle">
-                              Target version: {task.targetVersion}
-                            </p>
-                          ) : null}
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                              alignItems: "center",
+                            }}
+                          >
+                            {task?.type ? (
+                              <span className="pill">
+                                {formatTaskType(task.type)}
+                              </span>
+                            ) : null}
+
+                            {task?.targetVersion ? (
+                              <p className="update-group-subtitle">
+                                Target version: {task.targetVersion}
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
 
                         <span>{updates.length}</span>
