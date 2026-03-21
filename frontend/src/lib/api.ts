@@ -306,7 +306,12 @@ export const api = {
   demoReset: () => http<void>("/demo/reset", { method: "POST" }),
 
   demoListProjects: () => http<ProjectDto[]>("/demo/projects"),
-
+  
+    demoUpdateProject: (projectId: string, payload: UpdateProjectRequest) =>
+    http<ProjectDto>(`/demo/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   demoGetProjectDetailsBySlug: (slug: string) =>
     http<ProjectDetailsDto>(`/demo/projects/${encodeURIComponent(slug)}`),
 
