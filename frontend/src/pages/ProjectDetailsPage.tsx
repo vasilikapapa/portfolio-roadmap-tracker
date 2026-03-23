@@ -17,6 +17,34 @@ import {
 import "../styles/projectDetails.css";
 
 /**
+ * Release notes shown when hovering a target version pill.
+ *
+ * You can expand this whenever you add more roadmap releases.
+ * The key should match the exact value stored in targetVersion.
+ */
+const VERSION_DESCRIPTIONS: Record<string, string[]> = {
+  "v1.0": [
+    "Initial release with core project functionality",
+    "Basic task board and public project view",
+  ],
+  "v1.1": [
+    "Performance improvements",
+    "Bug fixes",
+    "UI polish and usability updates",
+  ],
+  "v1.2": [
+    "Planning board improvements",
+    "Task grouping enhancements",
+    "Better project management workflow",
+  ],
+  "v2.0": [
+    "Major feature expansion",
+    "New roadmap experience",
+    "Larger structural improvements across the app",
+  ],
+};
+
+/**
  * Groups tasks into Kanban columns by their status:
  * BACKLOG / IN_PROGRESS / DONE
  */
@@ -112,6 +140,105 @@ function formatTaskType(type?: string | null) {
 }
 
 /**
+ * Converts a version code like "v1.1" into a friendlier title.
+ */
+function formatVersionTitle(version: string) {
+  return `Version ${version.replace(/^v/i, "")}`;
+}
+
+/**
+ * Returns tooltip lines for a version.
+ *
+ * If a version is not listed in VERSION_DESCRIPTIONS,
+ * we still show a helpful fallback message.
+ */
+function getVersionDescription(version: string) {
+  return (
+    VERSION_DESCRIPTIONS[version] ?? [
+      `${formatVersionTitle(version)} roadmap milestone`,
+      "Planned work and improvements are grouped into this release",
+    ]
+  );
+}
+
+/**
+ * Small reusable hover tooltip used for target versions.
+ */
+function VersionTooltip({
+  version,
+  children,
+}: {
+  version: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const lines = getVersionDescription(version);
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+      }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      {children}
+
+      {open && (
+        <div
+          role="tooltip"
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 10px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 240,
+            maxWidth: "min(240px, 80vw)",
+            background: "rgba(18, 20, 30, 0.97)",
+            color: "#fff",
+            border: "1px solid rgba(255,255,255,0.10)",
+            borderRadius: 12,
+            padding: "10px 12px",
+            boxShadow: "0 14px 34px rgba(0,0,0,0.35)",
+            zIndex: 50,
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            {formatVersionTitle(version)}
+          </div>
+
+          <div style={{ display: "grid", gap: 4 }}>
+            {lines.map((line, index) => (
+              <div key={index}>• {line}</div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "7px solid transparent",
+              borderRight: "7px solid transparent",
+              borderTop: "7px solid rgba(18, 20, 30, 0.97)",
+            }}
+          />
+        </div>
+      )}
+    </span>
+  );
+}
+
+/**
  * ProjectDetailsPage (PUBLIC)
  *
  * Purpose:
@@ -122,6 +249,7 @@ function formatTaskType(type?: string | null) {
  * - Users can still click Edit, but protected access is handled
  *   through admin/demo login routing
  * - Task type support is backend-driven via string values
+ * - Target versions now show hover tooltips with release context
  */
 export default function ProjectDetailsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -347,7 +475,15 @@ export default function ProjectDetailsPage() {
                           <span className="pill">{t.priority}</span>
 
                           {t.targetVersion ? (
-                            <span className="pill">{t.targetVersion}</span>
+                            <VersionTooltip version={t.targetVersion}>
+                              <span
+                                className="pill"
+                                style={{ cursor: "help" }}
+                                tabIndex={0}
+                              >
+                                {t.targetVersion}
+                              </span>
+                            </VersionTooltip>
                           ) : null}
 
                           <span className="pill">{t.status}</span>
@@ -438,9 +574,18 @@ export default function ProjectDetailsPage() {
                             ) : null}
 
                             {task?.targetVersion ? (
-                              <p className="update-group-subtitle">
-                                Target version: {task.targetVersion}
-                              </p>
+                              <VersionTooltip version={task.targetVersion}>
+                                <p
+                                  className="update-group-subtitle"
+                                  style={{
+                                    margin: 0,
+                                    cursor: "help",
+                                  }}
+                                  tabIndex={0}
+                                >
+                                  Target version: {task.targetVersion}
+                                </p>
+                              </VersionTooltip>
                             ) : null}
                           </div>
                         </div>
