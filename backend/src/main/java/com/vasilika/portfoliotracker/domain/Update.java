@@ -63,6 +63,16 @@ public class Update {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /**
+     * Generate the UUID right before insert when none was set.
+     * Leaving id null for new entities lets Spring Data call persist()
+     * (plain INSERT) instead of merge() (SELECT + INSERT).
+     */
+    @PrePersist
+    void assignIdIfMissing() {
+        if (id == null) id = UUID.randomUUID();
+    }
+
     // ===== Getters and Setters =====
 
     public UUID getId() {

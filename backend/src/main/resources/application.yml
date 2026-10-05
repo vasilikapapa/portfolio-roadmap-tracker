@@ -7,9 +7,20 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME}        # Database username
     password: ${SPRING_DATASOURCE_PASSWORD}        # Database password
 
+    hikari:
+      maximum-pool-size: 5                        # Small pool: enough for a portfolio app, light on free-tier DBs
+      minimum-idle: 1
+      connection-timeout: 20000
+
   jpa:
     hibernate:
       ddl-auto: none                              # Disable automatic schema generation (Flyway manages DB)
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50                          # Group INSERT/UPDATEs (used by demo reseed)
+        order_inserts: true
+        order_updates: true
 
   flyway:
     enabled: true                                 # Enable Flyway database migrations
@@ -17,6 +28,10 @@ spring:
 
 server:
   port: ${PORT:8081}                              # Server port (default 8081 if PORT not provided)
+  compression:
+    enabled: true                                 # gzip JSON responses (smaller payloads over the network)
+    mime-types: application/json,text/plain
+    min-response-size: 1024
 
 
 app:

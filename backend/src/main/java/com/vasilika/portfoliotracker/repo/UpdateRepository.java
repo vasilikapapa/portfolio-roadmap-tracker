@@ -3,6 +3,7 @@ package com.vasilika.portfoliotracker.repo;
 import com.vasilika.portfoliotracker.domain.Update;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -36,11 +37,13 @@ public interface UpdateRepository extends JpaRepository<Update, UUID> {
     /**
      * Retrieve all updates for a project ordered by newest first.
      */
+    @EntityGraph(attributePaths = "task") // load linked task in the same query (avoids N+1)
     List<Update> findByProject_IdOrderByCreatedAtDesc(UUID projectId);
 
     /**
      * Paginated version of newest-first query.
      */
+    @EntityGraph(attributePaths = "task") // load linked task in the same query (avoids N+1)
     Page<Update> findByProject_IdOrderByCreatedAtDesc(UUID projectId, Pageable pageable);
 
     /**

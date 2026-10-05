@@ -17,6 +17,7 @@ import com.vasilika.portfoliotracker.web.mapper.UpdateMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
@@ -46,6 +47,7 @@ import java.util.Locale;
  * - Query service              = read operations for both, via explicit methods
  */
 @Service
+@Transactional(readOnly = true) // one connection per request, no dirty-checking on reads
 public class ProjectQueryService {
 
     private final ProjectRepository projects;

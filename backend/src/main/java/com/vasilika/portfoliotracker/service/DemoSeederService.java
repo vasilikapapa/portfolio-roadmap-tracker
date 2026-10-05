@@ -10,6 +10,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,11 +31,19 @@ public class DemoSeederService {
         this.updates = updates;
     }
 
+    /**
+     * Rebuilds the demo sandbox as a copy of the real portfolio.
+     *
+     * Performance notes (this runs on every demo login):
+     * - Old demo data is removed with ONE bulk delete (DB cascades to tasks/updates).
+     * - New rows have no id set, so Hibernate INSERTs them directly instead of
+     *   doing a SELECT first, and JDBC batching groups the INSERTs.
+     */
     @Transactional
     public void seedDemoData() {
 
-        // Clear previous demo data
-        projects.deleteAllByDemoTrue();
+        // Clear previous demo data (single SQL statement)
+        projects.bulkDeleteDemoProjects();
 
         // Get all admin projects
         List<Project> adminProjects = projects.findAllByDemoFalse();
@@ -42,7 +51,6 @@ public class DemoSeederService {
         for (Project admin : adminProjects) {
 
             Project demoProject = new Project();
-            demoProject.setId(UUID.randomUUID());
             demoProject.setDemo(true);
             demoProject.setSlug(admin.getSlug());
             demoProject.setName(admin.getName());
@@ -51,19 +59,16 @@ public class DemoSeederService {
             demoProject.setTechStack(admin.getTechStack());
             demoProject.setRepoUrl(admin.getRepoUrl());
             demoProject.setLiveUrl(admin.getLiveUrl());
-            demoProject.setCreatedAt(Instant.now());
-            demoProject.setUpdatedAt(Instant.now());
 
             Project savedDemoProject = projects.save(demoProject);
 
             // Map admin task id -> copied demo task
             Map<UUID, Task> demoTaskByAdminTaskId = new HashMap<>();
+            List<Task> demoTasks = new ArrayList<>();
 
             // Copy tasks
-            List<Task> adminTasks = tasks.findByProject_Id(admin.getId());
-            for (Task t : adminTasks) {
+            for (Task t : tasks.findByProject_Id(admin.getId())) {
                 Task demoTask = new Task();
-                demoTask.setId(UUID.randomUUID());
                 demoTask.setProject(savedDemoProject);
                 demoTask.setTitle(t.getTitle());
                 demoTask.setDescription(t.getDescription());
@@ -74,28 +79,29 @@ public class DemoSeederService {
                 demoTask.setCreatedAt(Instant.now());
                 demoTask.setUpdatedAt(Instant.now());
 
-                Task savedDemoTask = tasks.save(demoTask);
-                demoTaskByAdminTaskId.put(t.getId(), savedDemoTask);
+                demoTasks.add(demoTask);
+                demoTaskByAdminTaskId.put(t.getId(), demoTask);
             }
+            tasks.saveAll(demoTasks);
 
             // Copy updates
-            List<Update> adminUpdates = updates.findByProject_Id(admin.getId());
-            for (Update u : adminUpdates) {
+            List<Update> demoUpdates = new ArrayList<>();
+            for (Update u : updates.findByProject_Id(admin.getId())) {
                 Update demoUpdate = new Update();
-                demoUpdate.setId(UUID.randomUUID());
                 demoUpdate.setProject(savedDemoProject);
                 demoUpdate.setTitle(u.getTitle());
                 demoUpdate.setBody(u.getBody());
                 demoUpdate.setCreatedAt(Instant.now());
 
                 // Preserve task link by attaching the MATCHING DEMO task
+                // (getTask().getId() reads the FK without loading the task)
                 if (u.getTask() != null) {
-                    Task matchingDemoTask = demoTaskByAdminTaskId.get(u.getTask().getId());
-                    demoUpdate.setTask(matchingDemoTask);
+                    demoUpdate.setTask(demoTaskByAdminTaskId.get(u.getTask().getId()));
                 }
 
-                updates.save(demoUpdate);
+                demoUpdates.add(demoUpdate);
             }
+            updates.saveAll(demoUpdates);
         }
     }
 }

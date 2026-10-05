@@ -2,6 +2,8 @@ package com.vasilika.portfoliotracker.repo;
 
 import com.vasilika.portfoliotracker.domain.Project;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -40,6 +42,15 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
         List<Project> findAllByDemoTrue();
 
         void deleteAllByDemoTrue();
+
+        /**
+         * Single bulk DELETE for all demo projects.
+         * Tasks, updates and planning items are removed by ON DELETE CASCADE in the DB,
+         * instead of loading and deleting every row one by one.
+         */
+        @Modifying(clearAutomatically = true, flushAutomatically = true)
+        @Query("delete from Project p where p.demo = true")
+        int bulkDeleteDemoProjects();
 
         List<Project> findAllByDemoFalse();
 }
